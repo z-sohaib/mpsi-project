@@ -1,0 +1,17 @@
+# This hook prevents pushing if the build fails
+
+# ANSI color codes for formatting
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+NC='\033[0m'
+
+# Run your build command (replace with your actual build command)
+build_command="npm run build"
+
+if ! $build_command; then
+  echo "%s\n ${RED}error: Build failed. Please fix the errors and try again.${NC}">&2
+  exit 1
+else
+  echo "%s\n ${GREEN}Build succeeded. Processing and Pushing...${NC}"
+fi

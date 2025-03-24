@@ -1,2 +1,23 @@
 npm run lint-staged
 
+# ANSI color codes for formatting
+
+RED='\033[0;31m'
+NC='\033[0m'
+
+# Check the exit status of the previous command
+
+if [ $? -ne 0 ]; then
+  echo "${RED}Linting failed. Please fix the errors and try again.${NC}"
+  exit 1
+fi
+
+# Run Jest tests
+# npm run test
+
+# Check the exit status of the previous command
+
+if [ $? -ne 0 ]; then
+  echo "${RED}Tests failed. Please fix the errors and try again.${NC}"
+  exit 1
+fi
