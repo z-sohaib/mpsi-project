@@ -16,6 +16,9 @@ export default {
           'Noto Color Emoji',
         ],
       },
+      colors: {
+        mpsi: '#008CFF',
+      },
     },
   },
   plugins: [],
