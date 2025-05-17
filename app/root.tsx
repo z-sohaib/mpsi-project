@@ -6,6 +6,7 @@ import {
   ScrollRestoration,
 } from '@remix-run/react';
 import type { LinksFunction } from '@remix-run/node';
+import { MotionConfig } from 'framer-motion';
 
 import './styles/tailwind.css';
 
@@ -32,7 +33,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <Links />
       </head>
       <body>
-        {children}
+        <MotionConfig reducedMotion='user'>{children}</MotionConfig>
         <ScrollRestoration />
         <Scripts />
       </body>
