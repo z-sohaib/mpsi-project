@@ -2,6 +2,8 @@ import type { MetaFunction, LinksFunction } from '@remix-run/node';
 import ProfileDetails from '../components/ui/ProfileDetails';
 import BriefDetails from '../components/ui/BriefDetails';
 import PhotoProfile from '../components/ui/PhotoProfile';
+import Sidebar from '../components/layout/Sidebar';
+import Topbar from '../components/layout/Topbar';
 
 export const meta: MetaFunction = () => [
   { title: 'MPSI Frontend - Settings / Profile' },
@@ -32,27 +34,40 @@ export default function SettingsProfile() {
   };
 
   return (
-    <div className='min-h-screen bg-white p-6'>
-      <h1 className='mb-6 text-xl font-semibold text-blue-500'>Profile</h1>
-      <div className='flex justify-center gap-6 '>
-        <div className='flex w-1/4 flex-col gap-6'>
-          <PhotoProfile
-            firstName={user.firstName}
-            lastName={user.lastName}
-            email={user.email}
-            imageSrc={user.imageSrc}
-            onEditClick={() => console.log('Edit photo clicked')}
-          />
-          <BriefDetails
-            name={`${user.firstName} ${user.lastName}`}
-            email={user.email}
-            tel={user.tel}
-            plan={user.plan}
-            preferences={user.preferences}
-          />
-        </div>
-        <div className='w-3/4'>
-          <ProfileDetails initialData={profileDetails} />
+    <div className='flex min-h-screen bg-gray-50'>
+      {/* Sidebar */}
+      <Sidebar />
+
+      {/* Main Content Area */}
+      <div className='flex flex-1 flex-col'>
+        {/* Topbar */}
+        <Topbar />
+
+        {/* Page Content */}
+        <div className='min-h-full bg-white p-6'>
+          <h1 className='mb-6 text-xl font-semibold text-blue-500'>Profile</h1>
+          <div className='flex justify-center gap-6'>
+            <div className='flex w-1/4 flex-col gap-6'>
+              <PhotoProfile
+                firstName={user.firstName}
+                lastName={user.lastName}
+                email={user.email}
+                imageSrc={user.imageSrc}
+                onEditClick={() => console.log('Edit photo clicked')}
+              />
+
+              <BriefDetails
+                name={`${user.firstName} ${user.lastName}`}
+                email={user.email}
+                tel={user.tel}
+                plan={user.plan}
+                preferences={user.preferences}
+              />
+            </div>
+            <div className='w-3/4'>
+              <ProfileDetails initialData={profileDetails} />
+            </div>
+          </div>
         </div>
       </div>
     </div>

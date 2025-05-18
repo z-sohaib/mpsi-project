@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Layout from '~/components/layout/Layout';
 import { Button } from '~/components/ui/Button';
 import FilterGroup from '~/components/ui/FilterGroup';
@@ -6,88 +7,71 @@ import { Table } from '~/components/ui/Table';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface Equipement {
-  pic: string;
-  nom: string;
+  id: number;
+  model_reference: string | null;
+  created_at: string;
+  numero_serie: string;
   designation: string;
-  modele: string;
-  numeroSerie: string;
-  serviceAffectation: string;
-  inventaire: string;
-  observation: string;
+  observation: string | null;
+  numero_inventaire: string | null;
+  image: string | null;
 }
 
-const equipements: Equipement[] = [
-  {
-    pic: '/equipement.png',
-    nom: 'Imprimante Laser',
-    designation: 'Imprimante bureautique monochrome',
-    modele: 'HP LaserJet Pro M404dn',
-    numeroSerie: 'HPLJP45892X',
-    serviceAffectation: 'Service Administratif',
-    inventaire: 'INV-2021-078',
-    observation: 'TBD',
-  },
-  {
-    pic: '/equipement.png',
-    nom: 'Ordinateur portable',
-    designation: 'Portable professionnel 14"',
-    modele: 'Dell Latitude 5420',
-    numeroSerie: 'DL5420-78954',
-    serviceAffectation: 'Service Informatique',
-    inventaire: 'INV-2022-103',
-    observation: 'TBD',
-  },
-  {
-    pic: '/equipement.png',
-    nom: 'Écran',
-    designation: 'Écran 24" Full HD',
-    modele: 'Samsung S24R350',
-    numeroSerie: 'SASR24-32587',
-    serviceAffectation: 'Service Pédagogique',
-    inventaire: 'INV-2021-145',
-    observation: 'TBD',
-  },
-  {
-    pic: '/equipement.png',
-    nom: 'Station de travail',
-    designation: 'PC fixe haute performance',
-    modele: 'HP Z2 Tower G5',
-    numeroSerie: 'HPZ2G5-98732',
-    serviceAffectation: 'Service Technique',
-    inventaire: 'INV-2023-012',
-    observation: 'TBD',
-  },
-  {
-    pic: '/equipement.png',
-    nom: 'Tablette',
-    designation: 'iPad Pro 11 pouces',
-    modele: 'Apple iPad Pro 2022',
-    numeroSerie: 'APLIPAD-45621',
-    serviceAffectation: 'Service Pédagogique',
-    inventaire: 'INV-2022-089',
-    observation: 'TBD',
-  },
-  {
-    pic: '/equipement.png',
-    nom: 'Serveur',
-    designation: 'Serveur rack 1U',
-    modele: 'Dell PowerEdge R440',
-    numeroSerie: 'DLPE-772145',
-    serviceAffectation: 'Service Informatique',
-    inventaire: 'INV-2021-003',
-    observation: 'TBD',
-  },
-];
-
 export default function ListeEquipementsPage() {
+  const navigate = useNavigate();
+  const [equipements, setEquipements] = useState<Equipement[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [date, setDate] = useState<string | null>(null);
-  const [service, setService] = useState<string | null>(null);
-  const [type, setType] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 6;
+
+  // Fetch equipements from the backend
+  useEffect(() => {
+    const fetchEquipements = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        if (!token) {
+          navigate('/auth', { replace: true });
+          return;
+        }
+
+        setLoading(true);
+        const response = await fetch(
+          'https://itms-mpsi.onrender.com/api/equipements/',
+          {
+            headers: {
+              Authorization: `Token ${token}`,
+              'Content-Type': 'application/json',
+              Accept: 'application/json',
+            },
+          },
+        );
+
+        if (response.ok) {
+          const data = await response.json();
+          setEquipements(data);
+        } else if (response.status === 401) {
+          console.warn('API returned 401. Invalid token. Logging out...');
+          localStorage.removeItem('token');
+          navigate('/auth', { replace: true });
+        } else {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+      } catch (err) {
+        console.error('Failed to fetch equipements:', err);
+        setError('Failed to load equipment. Please try again later.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchEquipements();
+  }, [navigate]);
 
   const handleReset = () => {
     setDate(null);
-    setService(null);
-    setType(null);
+    setCurrentPage(1); // Reset to first page on filter reset
   };
 
   const filterOptions = [
@@ -96,78 +80,96 @@ export default function ListeEquipementsPage() {
       placeholder: 'Date',
       value: date,
       onChange: setDate,
-      options: [
-        { label: '07 Mars 2025', value: '2025-03-07' },
-        { label: '08 Mars 2025', value: '2025-03-08' },
-      ],
-    },
-    {
-      id: 'service',
-      placeholder: 'Service',
-      value: service,
-      onChange: setService,
-      options: [
-        { label: 'Service Informatique', value: 'informatique' },
-        { label: 'Service Administratif', value: 'administratif' },
-        { label: 'Service Pédagogique', value: 'pedagogique' },
-        { label: 'Service Technique', value: 'technique' },
-      ],
-    },
-    {
-      id: 'type',
-      placeholder: 'Type',
-      value: type,
-      onChange: setType,
-      options: [
-        { label: 'Imprimante', value: 'imprimante' },
-        { label: 'Ordinateur portable', value: 'portable' },
-        { label: 'Écran', value: 'ecran' },
-        { label: 'Station de travail', value: 'station' },
-        { label: 'Tablette', value: 'tablette' },
-        { label: 'Serveur', value: 'serveur' },
-      ],
+      options: [{ label: '18 May 2025', value: '2025-05-18' }],
     },
   ];
 
-  const filteredEquipements = equipements.filter(() => {
-    // Apply filters when implemented
-    return true;
+  const filteredEquipements = equipements.filter((equipement) => {
+    let matches = true;
+    if (date) {
+      matches =
+        matches &&
+        new Date(equipement.created_at).toISOString().split('T')[0] === date;
+    }
+    return matches;
   });
+
+  // Pagination logic
+  const totalPages = Math.ceil(filteredEquipements.length / itemsPerPage);
+  const paginatedEquipements = filteredEquipements.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage,
+  );
+
+  const handlePrevPage = () => {
+    if (currentPage > 1) setCurrentPage(currentPage - 1);
+  };
+
+  const handleNextPage = () => {
+    if (currentPage < totalPages) setCurrentPage(currentPage + 1);
+  };
 
   const columns = [
     {
       header: 'PIC',
-      accessor: 'pic' as const,
-      cell: (value: string) => (
+      accessor: 'image' as const,
+      cell: (value: string | null) => (
         <div className='flex justify-center'>
           <img
             width={40}
-            src={value}
+            src={value || '/equipement.png'}
             alt='Équipement'
             className='size-10 rounded-md border border-gray-200 object-cover'
           />
         </div>
       ),
     },
-    { header: 'Équipement', accessor: 'nom' as const },
     { header: 'Désignation', accessor: 'designation' as const },
-    { header: 'Model / référence', accessor: 'modele' as const },
-    { header: 'Numéro de série', accessor: 'numeroSerie' as const },
-    {
-      header: "Service d'affectation",
-      accessor: 'serviceAffectation' as const,
-    },
-    { header: "N° d'inventaire", accessor: 'inventaire' as const },
+    { header: 'Model / référence', accessor: 'model_reference' as const },
+    { header: 'Numéro de série', accessor: 'numero_serie' as const },
+    { header: "N° d'inventaire", accessor: 'numero_inventaire' as const },
     {
       header: 'Observation',
       accessor: 'observation' as const,
-      cell: (value: string) => (
+      cell: (value: string | null) => (
         <Button variant='outline' className='border-mpsi text-mpsi'>
-          {value}
+          {value || 'N/A'}
         </Button>
       ),
     },
   ];
+
+  if (loading) {
+    return (
+      <Layout>
+        <div className='flex min-h-screen items-center justify-center bg-gray-100'>
+          <div className='text-center'>
+            <div className='mx-auto mb-2 size-10 animate-spin rounded-full border-4 border-gray-300 border-t-blue-600'></div>
+            <p className='text-gray-600'>Chargement des équipements...</p>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
+
+  if (error) {
+    return (
+      <Layout>
+        <div className='flex min-h-screen items-center justify-center bg-gray-100'>
+          <div className='max-w-md rounded-lg bg-white p-6 shadow-lg'>
+            <h2 className='mb-4 text-xl font-semibold text-red-600'>Erreur</h2>
+            <p className='text-gray-700'>{error}</p>
+            <button
+              onClick={() => window.location.reload()}
+              className='mt-4 rounded-md bg-blue-600 px-4 py-2 text-white hover:bg-blue-700'
+            >
+              Réessayer
+            </button>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
 
   return (
     <Layout>
@@ -181,23 +183,30 @@ export default function ListeEquipementsPage() {
 
         <div className='flex flex-wrap items-center justify-between gap-4'>
           <FilterGroup filters={filterOptions} onReset={handleReset} />
-          <button className='rounded-md bg-[#1D6BF3] px-6 py-3.5 text-base text-white hover:bg-[#155dc2]'>
+          <button
+            onClick={() => navigate('/equipements/new')}
+            className='rounded-md bg-[#1D6BF3] px-6 py-3.5 text-base text-white hover:bg-[#155dc2]'
+          >
             Ajouter un équipement
           </button>
         </div>
 
-        <Table data={filteredEquipements} columns={columns} />
+        <Table data={paginatedEquipements} columns={columns} />
 
         <div className='flex justify-between'>
           <Button
             variant='outline'
             className='flex items-center gap-2 border-mpsi text-mpsi'
+            onClick={handlePrevPage}
+            disabled={currentPage === 1}
           >
             <ChevronLeft className='size-4' /> Prev. Data
           </Button>
           <Button
             variant='outline'
             className='flex items-center gap-2 border-mpsi text-mpsi'
+            onClick={handleNextPage}
+            disabled={currentPage === totalPages}
           >
             Next Data <ChevronRight className='size-4' />
           </Button>

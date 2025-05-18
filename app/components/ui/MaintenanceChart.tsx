@@ -1,12 +1,11 @@
 import { useState, useEffect } from 'react';
 import {
   ComposedChart as RechartsComposedChart,
-  Line as RechartsLine,
+  Bar as RechartsBar,
   XAxis as RechartsXAxis,
   YAxis as RechartsYAxis,
   Tooltip as RechartsTooltip,
   ResponsiveContainer as RechartsResponsiveContainer,
-  Area as RechartsArea,
   CartesianGrid as RechartsCartesianGrid,
 } from 'recharts';
 
@@ -28,12 +27,11 @@ export default function MaintenanceChart({
 }) {
   const [chartLibrary, setChartLibrary] = useState<{
     ComposedChart: typeof RechartsComposedChart;
-    Line: typeof RechartsLine;
+    Bar: typeof RechartsBar;
     XAxis: typeof RechartsXAxis;
     YAxis: typeof RechartsYAxis;
     Tooltip: typeof RechartsTooltip;
     ResponsiveContainer: typeof RechartsResponsiveContainer;
-    Area: typeof RechartsArea;
     CartesianGrid: typeof RechartsCartesianGrid;
   } | null>(null);
 
@@ -53,12 +51,11 @@ export default function MaintenanceChart({
 
   const {
     ComposedChart,
-    Line,
+    Bar,
     XAxis,
     YAxis,
     Tooltip,
     ResponsiveContainer,
-    Area,
     CartesianGrid,
   } = chartLibrary;
 
@@ -66,7 +63,7 @@ export default function MaintenanceChart({
     if (active && payload && payload.length) {
       return (
         <div className='rounded bg-mpsi px-2 py-1 text-sm text-white shadow-md'>
-          {label}: {payload[0].value}%
+          {label}: {payload[0].value}
         </div>
       );
     }
@@ -92,27 +89,13 @@ export default function MaintenanceChart({
         <YAxis
           axisLine={false}
           tickLine={false}
-          domain={[0, 100]}
-          ticks={[0, 20, 40, 60, 80, 100]}
-          tickFormatter={(value) => `${value}%`}
+          domain={[0, 50]}
+          ticks={[0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50]}
+          tickFormatter={(value) => `${value}`}
           tick={{ fontSize: 12, fill: '#666' }}
         />
         <Tooltip content={<CustomTooltip />} />
-        <Area
-          type='monotone'
-          dataKey='value'
-          fill='url(#colorValue)'
-          fillOpacity={1}
-          stroke='none'
-        />
-        <Line
-          type='monotone'
-          dataKey='value'
-          stroke='#0D6EFD'
-          strokeWidth={2}
-          dot={{ r: 4, fill: '#0D6EFD' }}
-          activeDot={{ r: 5, fill: '#0D6EFD' }}
-        />
+        <Bar dataKey='value' fill='#0D6EFD' fillOpacity={1} stroke='none' />
       </ComposedChart>
     </ResponsiveContainer>
   );
