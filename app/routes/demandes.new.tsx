@@ -5,6 +5,71 @@ import { useState } from 'react';
 
 export default function RemplirDemandePage() {
   const [showSuccess, setShowSuccess] = useState(false);
+  const [formData, setFormData] = useState({
+    nom_deposant: '',
+    panne_declaree: '',
+    email: '',
+    marque: '',
+    numero_telephone: '',
+    service_affectation: '',
+    status: 'Etudiant',
+    type_materiel: 'Ordinateur',
+    numero_inventaire: '',
+    status_demande: 'Nouvelle',
+  });
+
+  const handleInputChange = (
+    e: React.ChangeEvent<
+      HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
+    >,
+  ) => {
+    const { id, value } = e.target;
+    setFormData((prev) => ({
+      ...prev,
+      [id.replace('-', '_')]: value,
+    }));
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const demandePayload = {
+        nom_deposant: formData.nom_deposant,
+        panne_declaree: formData.panne_declaree,
+        email: formData.email,
+        marque: formData.marque,
+        numero_telephone: formData.numero_telephone,
+        service_affectation: formData.service_affectation,
+        status: formData.status,
+        type_materiel: formData.type_materiel,
+        numero_inventaire: formData.numero_inventaire,
+        status_demande: formData.status_demande,
+      };
+
+      const response = await fetch(
+        'https://itms-mpsi.onrender.com/api/demandes/',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(demandePayload),
+        },
+      );
+
+      if (response.ok) {
+        setShowSuccess(true);
+      } else {
+        console.error(
+          'Failed to submit demande:',
+          response.status,
+          response.statusText,
+        );
+      }
+    } catch (error) {
+      console.error('Error submitting demande:', error);
+    }
+  };
 
   return (
     <Layout>
@@ -14,19 +79,25 @@ export default function RemplirDemandePage() {
             Remplir une demande
           </h2>
 
-          <form className='grid grid-cols-1 gap-x-6 gap-y-4 md:grid-cols-2'>
+          <form
+            id='demande-form'
+            className='grid grid-cols-1 gap-x-6 gap-y-4 md:grid-cols-2'
+            onSubmit={handleSubmit}
+          >
             {/* Nom déposant */}
             <div className='w-full'>
               <label
-                htmlFor='nom'
+                htmlFor='nom-deposant'
                 className='mb-1 block text-sm font-medium text-gray-700'
               >
                 Nom déposant (e)
               </label>
               <Input
-                id='nom'
+                id='nom-deposant'
                 placeholder='Entrez votre nom'
-                className='w-full'
+                className='w-full rounded-md border-gray-300 focus:border-blue-500 focus:ring-blue-500'
+                value={formData.nom_deposant}
+                onChange={handleInputChange}
               />
             </div>
 
@@ -42,7 +113,9 @@ export default function RemplirDemandePage() {
                 id='panne-declaree'
                 rows={1}
                 placeholder='Décrivez le problème'
-                className='w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
+                className='w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
+                value={formData.panne_declaree}
+                onChange={handleInputChange}
               />
             </div>
 
@@ -58,7 +131,9 @@ export default function RemplirDemandePage() {
                 id='email'
                 type='email'
                 placeholder='votre.email@esi.dz'
-                className='w-full'
+                className='w-full rounded-md border-gray-300 focus:border-blue-500 focus:ring-blue-500'
+                value={formData.email}
+                onChange={handleInputChange}
               />
             </div>
 
@@ -72,13 +147,17 @@ export default function RemplirDemandePage() {
               </label>
               <select
                 id='type-materiel'
-                className='w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
+                className='w-full appearance-none rounded-md border border-gray-300 bg-white bg-[url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxNiIgaGVpZ2h0PSIxNiIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiM0YTRkNTgiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cG9seWxpbmUgcG9pbnRzPSI2IDkgMTIgMTUgMTggOSIvPjwvc3ZnPg==")] bg-[length:16px_16px] bg-[right_0.75rem_center] bg-no-repeat px-3 py-2 text-sm text-gray-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
+                value={formData.type_materiel}
+                onChange={handleInputChange}
               >
-                <option value=''>Sélectionner un type</option>
-                <option value='ordinateur'>Ordinateur</option>
-                <option value='imprimante'>Imprimante</option>
-                <option value='ecran'>Écran</option>
-                <option value='tablette'>Tablette</option>
+                <option value='' disabled>
+                  Sélectionner un type
+                </option>
+                <option value='Ordinateur'>Ordinateur</option>
+                <option value='Imprimante'>Imprimante</option>
+                <option value='Serveur'>Serveur</option>
+                <option value='Autre'>Autre</option>
               </select>
             </div>
 
@@ -92,54 +171,29 @@ export default function RemplirDemandePage() {
               </label>
               <Input
                 id='marque'
-                placeholder='Ex: Dell Latitude 5420'
-                className='w-full'
+                placeholder='Ex: Brother MFC'
+                className='w-full rounded-md border-gray-300 focus:border-blue-500 focus:ring-blue-500'
+                value={formData.marque}
+                onChange={handleInputChange}
               />
             </div>
 
-            {/* Date acquisition */}
+            {/* Numéro de téléphone */}
             <div className='w-full'>
               <label
-                htmlFor='date-acquisition'
+                htmlFor='numero-telephone'
                 className='mb-1 block text-sm font-medium text-gray-700'
               >
-                Date d&apos;acquisition
-              </label>
-              <Input id='date-acquisition' type='date' className='w-full' />
-            </div>
-
-            {/* N° série */}
-            <div className='w-full'>
-              <label
-                htmlFor='numero-serie'
-                className='mb-1 block text-sm font-medium text-gray-700'
-              >
-                N° série
+                Numéro de téléphone
               </label>
               <Input
-                id='numero-serie'
-                placeholder='Numéro de série'
-                className='w-full'
+                id='numero-telephone'
+                type='tel'
+                placeholder='Ex: 0723456789'
+                className='w-full rounded-md border-gray-300 focus:border-blue-500 focus:ring-blue-500'
+                value={formData.numero_telephone}
+                onChange={handleInputChange}
               />
-            </div>
-
-            {/* Priorité */}
-            <div className='w-full'>
-              <label
-                htmlFor='priorite'
-                className='mb-1 block text-sm font-medium text-gray-700'
-              >
-                Priorité
-              </label>
-              <select
-                id='priorite'
-                className='w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
-              >
-                <option value=''>Sélectionner une priorité</option>
-                <option value='haute'>Haute</option>
-                <option value='moyenne'>Moyenne</option>
-                <option value='basse'>Basse</option>
-              </select>
             </div>
 
             {/* N° inventaire */}
@@ -148,32 +202,68 @@ export default function RemplirDemandePage() {
                 htmlFor='numero-inventaire'
                 className='mb-1 block text-sm font-medium text-gray-700'
               >
-                N° d&apos;inventaire
+                N° d’inventaire
               </label>
               <Input
                 id='numero-inventaire'
-                placeholder="Numéro d'inventaire"
-                className='w-full'
+                placeholder='Numéro d’inventaire'
+                className='w-full rounded-md border-gray-300 focus:border-blue-500 focus:ring-blue-500'
+                value={formData.numero_inventaire}
+                onChange={handleInputChange}
               />
             </div>
 
             {/* Service d'affectation */}
             <div className='w-full'>
               <label
-                htmlFor='service'
+                htmlFor='service-affectation'
                 className='mb-1 block text-sm font-medium text-gray-700'
               >
                 Service d&apos;affectation
               </label>
               <select
-                id='service'
-                className='w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
+                id='service-affectation'
+                className='w-full appearance-none rounded-md border border-gray-300 bg-white bg-[url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxNiIgaGVpZ2h0PSIxNiIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiM0YTRkNTgiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cG9seWxpbmUgcG9pbnRzPSI2IDkgMTIgMTUgMTggOSIvPjwvc3ZnPg==")] bg-[length:16px_16px] bg-[right_0.75rem_center] bg-no-repeat px-3 py-2 text-sm text-gray-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
+                value={formData.service_affectation}
+                onChange={handleInputChange}
               >
-                <option value=''>Sélectionner un service</option>
-                <option value='informatique'>Service Informatique</option>
-                <option value='administratif'>Service Administratif</option>
-                <option value='pedagogique'>Service Pédagogique</option>
-                <option value='technique'>Service Technique</option>
+                <option value='' disabled>
+                  Sélectionner un service
+                </option>
+                <option value='Service comptabilité'>
+                  Service comptabilité
+                </option>
+                <option value='Service Informatique'>
+                  Service Informatique
+                </option>
+                <option value='Service Administratif'>
+                  Service Administratif
+                </option>
+                <option value='Service Pédagogique'>Service Pédagogique</option>
+                <option value='Service Technique'>Service Technique</option>
+              </select>
+            </div>
+
+            {/* Type déposant */}
+            <div className='w-full'>
+              <label
+                htmlFor='status'
+                className='mb-1 block text-sm font-medium text-gray-700'
+              >
+                Type déposant
+              </label>
+              <select
+                id='status'
+                className='w-full appearance-none rounded-md border border-gray-300 bg-white bg-[url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxNiIgaGVpZ2h0PSIxNiIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiM0YTRkNTgiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cG9seWxpbmUgcG9pbnRzPSI2IDkgMTIgMTUgMTggOSIvPjwvc3ZnPg==")] bg-[length:16px_16px] bg-[right_0.75rem_center] bg-no-repeat px-3 py-2 text-sm text-gray-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
+                value={formData.status}
+                onChange={handleInputChange}
+              >
+                <option value='' disabled>
+                  Sélectionner un type
+                </option>
+                <option value='Etudiant'>Etudiant</option>
+                <option value='Enseignant'>Enseignant</option>
+                <option value='Employe'>Employe</option>
               </select>
             </div>
           </form>
@@ -181,8 +271,9 @@ export default function RemplirDemandePage() {
           {/* Button */}
           <div className='mt-10 flex justify-center'>
             <Button
-              className='bg-[#1D6BF3] px-8 hover:bg-blue-700'
-              onClick={() => setShowSuccess(true)}
+              className='rounded-md bg-[#1D6BF3] px-8 font-medium text-white hover:bg-blue-700'
+              type='submit'
+              form='demande-form'
             >
               Enregistrer
             </Button>
@@ -202,12 +293,12 @@ export default function RemplirDemandePage() {
                 </h3>
                 <p className='mb-6 text-sm text-gray-600'>
                   Un email a été envoyé à{' '}
-                  <span className='font-medium'>kn_bouzidi@esi.dz</span> pour
-                  l&apos;informer.
+                  <span className='font-medium'>{formData.email}</span> pour
+                  l’informer.
                 </p>
                 <Button
                   onClick={() => setShowSuccess(false)}
-                  className='mx-auto bg-[#1D6BF3] hover:bg-blue-700'
+                  className='mx-auto rounded-md bg-[#1D6BF3] font-medium text-white hover:bg-blue-700'
                 >
                   OK
                 </Button>

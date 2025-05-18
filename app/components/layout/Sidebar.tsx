@@ -1,4 +1,3 @@
-// components/layout/Sidebar.tsx
 import {
   Home,
   List,
@@ -14,27 +13,42 @@ const sections = [
   {
     title: 'Demandes',
     icon: <List className='size-4' />,
-    links: ['Nouvelles demandes', 'Liste des demandes', 'Remplir une demande'],
+    links: [
+      { name: 'Nouvelles demandes', path: '/' },
+      { name: 'Liste des demandes', path: '/demandes/interventions' }, // Placeholder, update if needed
+      { name: 'Remplir une demande', path: '/demandes/new' },
+    ],
   },
   {
     title: 'Interventions',
     icon: <Wrench className='size-4' />,
-    links: ['Liste des interventions', 'Interventions terminées'],
+    links: [
+      { name: 'Liste des interventions', path: '/demandes/interventions' },
+      { name: 'Interventions terminées', path: '/' }, // Placeholder, update if needed
+    ],
   },
   {
     title: 'Composants',
     icon: <Puzzle className='size-4' />,
-    links: ['Liste des composants', 'Ajouter un composant'],
+    links: [
+      { name: 'Liste des composants', path: '/composants' },
+      { name: 'Ajouter un composant', path: '/composants' }, // Placeholder, update if needed
+    ],
   },
   {
     title: 'Équipements',
     icon: <Monitor className='size-4' />,
-    links: ['Liste des équipements', 'Ajouter un équipement'],
+    links: [
+      { name: 'Liste des équipements', path: '/equipements' }, // Placeholder, update if needed
+      { name: 'Ajouter un équipement', path: '/equipements/new' }, // Placeholder, update if needed
+    ],
   },
   {
     title: 'Help',
     icon: <HelpCircle className='size-4' />,
-    links: ['FAQs'],
+    links: [
+      { name: 'FAQs', path: '/faq' }, // Placeholder, update if needed
+    ],
   },
 ];
 
@@ -48,7 +62,7 @@ export default function Sidebar() {
 
       {/* Dashboard */}
       <NavLink
-        to='/'
+        to='/dashboard'
         className='flex items-center gap-2 rounded-md bg-[#1D6BF3] px-3 py-2 font-medium text-white'
       >
         <Home className='size-4' />
@@ -65,12 +79,16 @@ export default function Sidebar() {
           <div className='space-y-1 pl-2 text-sm text-gray-700'>
             {section.links.map((link) => (
               <NavLink
-                key={link}
-                to='/'
-                className='flex items-center gap-2 hover:text-mpsi'
+                key={link.name}
+                to={link.path}
+                className={({ isActive }) =>
+                  `flex items-center gap-2 hover:text-mpsi ${
+                    isActive ? 'text-mpsi font-semibold' : ''
+                  }`
+                }
               >
                 <ChevronRight className='size-3.5' />
-                {link}
+                {link.name}
               </NavLink>
             ))}
           </div>

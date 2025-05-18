@@ -1,29 +1,41 @@
-import { useState } from 'react';
+import { Pencil } from 'lucide-react';
 
 type PhotoProfileProps = {
-  src: string;
-  alt: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  imageSrc: string;
+  onEditClick: () => void;
 };
 
-export default function PhotoProfile({ src, alt }: PhotoProfileProps) {
-  const [isHovered, setIsHovered] = useState(false);
-
+export default function PhotoProfile({
+  firstName,
+  lastName,
+  email,
+  imageSrc,
+  onEditClick,
+}: PhotoProfileProps) {
   return (
-    <div
-      className='relative size-16 overflow-hidden rounded-full'
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-    >
-      <img
-        src={src}
-        alt={alt} // Simplified alt, e.g., "User profile" instead of "User profile photo"
-        className='size-full object-cover'
-      />
-      {isHovered && (
-        <div className='absolute inset-0 flex items-center justify-center bg-black/50'>
-          <span className='text-sm text-white'>Change</span>
-        </div>
-      )}
+    <div className='w-full rounded-2xl border border-mpsi p-4 text-center shadow-sm'>
+      <div className='relative mx-auto size-40 overflow-hidden rounded-full'>
+        <img
+          src={imageSrc}
+          alt={`${firstName} ${lastName}`}
+          className='size-full object-cover'
+        />
+        <button
+          onClick={onEditClick}
+          className='absolute bottom-1 right-1 flex size-7 items-center justify-center rounded-full bg-blue-500 transition hover:bg-blue-600'
+        >
+          <Pencil size={14} color='white' />
+        </button>
+      </div>
+      <div className='mt-4'>
+        <h2 className='text-lg font-bold'>
+          {firstName.toUpperCase()} {lastName}
+        </h2>
+        <p className='text-sm text-gray-700'>{email}</p>
+      </div>
     </div>
   );
 }
