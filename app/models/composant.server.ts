@@ -1,0 +1,16 @@
+export interface Composant {
+  id: number;
+  type_composant: string;
+  model_reference: string | null;
+  numero_serie: string;
+  designation: string;
+  observation: string | null;
+  categorie_details: { id_categorie: number; designation: string } | null;
+  numero_serie_eq_source: string | null;
+  numero_inventaire_eq_source: string | null;
+  status: string | null;
+  quantity: number | null;
+  disponible: boolean | null;
+  image: string | null;
+  created_at: string;
+}

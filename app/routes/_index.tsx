@@ -58,8 +58,6 @@ export default function Repair() {
     setIsSubmitting(true);
     setSubmitError('');
 
-    console.log('Data to send:', formData);
-
     try {
       // Make the request without an Authorization header since the backend allows anonymous access
       const response = await fetch(
@@ -77,9 +75,7 @@ export default function Repair() {
         },
       );
 
-      console.log('Response status:', response.status);
       const responseData = await response.json();
-      console.log('Response data:', responseData);
 
       if (!response.ok) {
         throw new Error(

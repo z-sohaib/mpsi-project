@@ -8,7 +8,7 @@ type KpiCardProps = {
   value: string | number;
   trend: {
     value: string;
-    direction: 'up' | 'down';
+    direction: string;
     comparison: string;
   };
   icon: React.ReactNode;

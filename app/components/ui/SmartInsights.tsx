@@ -31,6 +31,7 @@ type SmartInsightsProps = {
   setSelectedAnalysisType: (type: string) => void;
   selectedYear: string;
   setSelectedYear: (year: string) => void;
+  availableYears: string[];
 };
 
 // Modern dropdown component

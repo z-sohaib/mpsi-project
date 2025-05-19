@@ -2,13 +2,31 @@ import { Input } from '~/components/ui/Input';
 import { Button } from '~/components/ui/Button';
 import Layout from '~/components/layout/Layout';
 import { useState, useEffect } from 'react';
-import { useLoaderData, useParams, useNavigate } from '@remix-run/react';
-import type { LoaderFunction } from '@remix-run/node';
+import {
+  useLoaderData,
+  useNavigate,
+  useFetcher,
+  useActionData,
+  Form,
+} from '@remix-run/react';
+import {
+  LoaderFunctionArgs,
+  ActionFunctionArgs,
+  data,
+  redirect,
+} from '@remix-run/node';
 import { motion, AnimatePresence } from 'framer-motion';
+import { requireUserId } from '~/session.server';
+import { fetchDemandeById, updateDemandeById } from '~/models/demandes.server';
 
 // Types for the API data
 type PrioriteType = 'Haute' | 'Moyenne' | 'Basse';
-type StatusDemandeType = 'Acceptee' | 'EnAttente' | 'Rejetee' | 'Terminee';
+type StatusDemandeType =
+  | 'Acceptee'
+  | 'EnAttente'
+  | 'Rejetee'
+  | 'Terminee'
+  | 'Nouvelle';
 
 // Define a proper type for components used in interventions
 interface Composant {
@@ -45,155 +63,215 @@ interface Demande {
   status: string;
   panne_declaree: string;
   status_demande: StatusDemandeType;
+  rejection_reason?: string | null;
+  panne_trouvee?: string;
+  materiels_installes?: string;
 }
 
-// Loader function to fetch data based on id
-export const loader: LoaderFunction = async ({ params }) => {
-  console.log('Loader called with params:', params);
-  const demandeId = params.id;
-
+// Updated loader function
+export async function loader({ params, request }: LoaderFunctionArgs) {
   try {
-    const response = await fetch(
-      `https://itms-mpsi.onrender.com/api/demandes/${demandeId}/`,
-    );
+    // Check if user is authenticated, this will throw a redirect if not
+    const session = await requireUserId(request);
+    const demandeId = params.id;
 
-    if (!response.ok) {
-      throw new Response('Demande not found', { status: 404 });
+    if (!demandeId) {
+      throw new Response('Demande ID is required', { status: 400 });
     }
 
-    const demande = await response.json();
-    return demande;
+    try {
+      const demande = await fetchDemandeById(session.access, demandeId);
+
+      if (!demande) {
+        throw new Response('Demande not found', { status: 404 });
+      }
+
+      return data({ demande });
+    } catch (error) {
+      console.error('Error fetching demande:', error);
+
+      if (error instanceof Response) {
+        throw error;
+      }
+
+      throw data(
+        { error: 'Failed to load demande data. Please try again later.' },
+        { status: 500 },
+      );
+    }
   } catch (error) {
-    console.error('Error fetching demande:', error);
-    throw new Response('Error fetching demande data', { status: 500 });
+    // Handle authentication redirect
+    if (error instanceof Response && error.status === 302) {
+      throw error;
+    }
+
+    // Pass through Response objects with specific status codes
+    if (error instanceof Response) {
+      throw error;
+    }
+
+    // Other errors
+    console.error('Authentication error:', error);
+    throw redirect('/auth');
   }
+}
+
+// Updated action function to handle all operations
+export async function action({ request, params }: ActionFunctionArgs) {
+  try {
+    const session = await requireUserId(request);
+    const demandeId = params.id;
+
+    if (!demandeId) {
+      return data({ error: 'Demande ID is required' }, { status: 400 });
+    }
+
+    const formData = await request.formData();
+    const action = formData.get('action') as string;
+
+    if (!action) {
+      return data({ error: 'Action is required' }, { status: 400 });
+    }
+
+    try {
+      // Handle different action types
+      switch (action) {
+        case 'accept':
+          await updateDemandeById(session.access, demandeId, {
+            status_demande: 'Acceptee',
+          });
+          return data({ success: true, action: 'accept' });
+
+        case 'reject': {
+          const rejectionReason = formData.get('rejectionReason') as string;
+          await updateDemandeById(session.access, demandeId, {
+            status_demande: 'Rejetee',
+            rejection_reason: rejectionReason,
+          });
+          return data({ success: true, action: 'reject' });
+        }
+
+        case 'save':
+          {
+            const panneTrouvee = formData.get('panneTrouvee') as string;
+            const materielsInstalles = formData.get(
+              'materielsInstalles',
+            ) as string;
+
+            await updateDemandeById(session.access, demandeId, {
+              panne_trouvee: panneTrouvee,
+              materiels_installes: materielsInstalles,
+            });
+          }
+
+          return data({
+            success: true,
+            action: 'save',
+            message: 'Modifications enregistrées!',
+          });
+
+        default:
+          return data({ error: 'Invalid action' }, { status: 400 });
+      }
+    } catch (error) {
+      console.error('Error updating demande:', error);
+      return data(
+        { error: 'Failed to process the request. Please try again.' },
+        { status: 500 },
+      );
+    }
+  } catch (error) {
+    // Handle authentication redirect
+    if (error instanceof Response && error.status === 302) {
+      throw error;
+    }
+
+    // Other errors
+    console.error('Authentication error:', error);
+    throw redirect('/auth');
+  }
+}
+
+// Define the type returned by the loader and action
+type LoaderData = {
+  demande: Demande;
+  error?: string;
+};
+
+type ActionData = {
+  success?: boolean;
+  action?: 'accept' | 'reject' | 'save';
+  message?: string;
+  error?: string;
 };
 
 export default function DemandeDetailleePage() {
+  const { demande, error: loaderError } = useLoaderData<LoaderData>();
+  const actionData = useActionData<ActionData>();
+  const acceptRejectFetcher = useFetcher();
+  const saveFetcher = useFetcher();
+
   const [showSuccess, setShowSuccess] = useState(false);
   const [showFailure, setShowFailure] = useState(false);
   const [rejectionReason, setRejectionReason] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [panneTrouvee, setPanneTrouvee] = useState('');
-  const [materielsInstalles, setMaterielsInstalles] = useState('');
+  const [error, setError] = useState<string | null>(loaderError || null);
+  const [panneTrouvee, setPanneTrouvee] = useState(demande.panne_trouvee || '');
+  const [materielsInstalles, setMaterielsInstalles] = useState(
+    demande.materiels_installes || '',
+  );
   const [modified, setModified] = useState(false);
-  const [savingChanges, setSavingChanges] = useState(false);
-
-  const demande = useLoaderData<Demande>();
-  const { id } = useParams();
+  const [showToast, setShowToast] = useState(false);
   const navigate = useNavigate();
+
+  // Track fetcher states for loading indicators
+  const isLoading =
+    acceptRejectFetcher.state === 'submitting' ||
+    saveFetcher.state === 'submitting' ||
+    acceptRejectFetcher.state === 'loading' ||
+    saveFetcher.state === 'loading';
 
   // Track if fields are modified
   useEffect(() => {
-    setModified(panneTrouvee !== '' || materielsInstalles !== '');
-  }, [panneTrouvee, materielsInstalles]);
+    setModified(
+      panneTrouvee !== (demande.panne_trouvee || '') ||
+        materielsInstalles !== (demande.materiels_installes || ''),
+    );
+  }, [
+    panneTrouvee,
+    materielsInstalles,
+    demande.panne_trouvee,
+    demande.materiels_installes,
+  ]);
+
+  // Watch for successful save actions to show toast
+  useEffect(() => {
+    if (actionData?.success && actionData.action === 'save') {
+      setShowToast(true);
+      const timer = setTimeout(() => {
+        setShowToast(false);
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [actionData]);
+
+  // Watch for action data changes to handle modals
+  useEffect(() => {
+    if (actionData?.success) {
+      if (actionData.action === 'accept') {
+        setShowSuccess(true);
+      } else if (actionData.action === 'reject') {
+        // Redirect after rejection
+        navigate('/demandes/interventions');
+      }
+    } else if (actionData?.error) {
+      setError(actionData.error);
+    }
+  }, [actionData, navigate]);
 
   // Format the date for input fields
   const formatDateForInput = (dateString: string) => {
     if (!dateString) return '';
     return dateString.split('T')[0];
-  };
-
-  // Handle saving modifications
-  const handleSaveChanges = async () => {
-    setSavingChanges(true);
-    try {
-      const response = await fetch(
-        `https://itms-mpsi.onrender.com/api/demandes/${id}/`,
-        {
-          method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            panne_trouvee: panneTrouvee,
-            materiels_installes: materielsInstalles,
-            // Add any other modified fields here
-          }),
-        },
-      );
-
-      if (!response.ok) {
-        throw new Error(`Error updating demande: ${response.status}`);
-      }
-
-      setModified(false);
-      setSavingChanges(false);
-      // Show mini toast
-      const toast = document.createElement('div');
-      toast.className =
-        'fixed bottom-4 right-4 bg-green-500 text-white px-4 py-2 rounded-md shadow-lg';
-      toast.textContent = 'Modifications enregistrées!';
-      document.body.appendChild(toast);
-      setTimeout(() => {
-        document.body.removeChild(toast);
-      }, 3000);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
-      setSavingChanges(false);
-    }
-  };
-
-  // Handle accepting the demande
-  const handleAccept = async () => {
-    setLoading(true);
-    try {
-      const response = await fetch(
-        `https://itms-mpsi.onrender.com/api/demandes/${id}/`,
-        {
-          method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            status_demande: 'Acceptee',
-          }),
-        },
-      );
-
-      if (!response.ok) {
-        throw new Error(`Error updating demande: ${response.status}`);
-      }
-
-      setShowSuccess(true);
-      setLoading(false);
-      navigate('/demandes/interventions'); // Redirect to the list after rejection
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
-      setLoading(false);
-    }
-  };
-
-  // Handle rejecting the demande
-  const handleReject = async () => {
-    setLoading(true);
-    try {
-      const response = await fetch(
-        `https://itms-mpsi.onrender.com/api/demandes/${id}/`,
-        {
-          method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            status_demande: 'Rejetee',
-            // You could also send the rejection reason if the API supports it
-          }),
-        },
-      );
-
-      if (!response.ok) {
-        throw new Error(`Error updating demande: ${response.status}`);
-      }
-
-      setShowFailure(false);
-      setLoading(false);
-      navigate('/demandes/interventions'); // Redirect to the list after rejection
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
-      setLoading(false);
-    }
   };
 
   // Handle modal close and navigation back to list
@@ -205,12 +283,19 @@ export default function DemandeDetailleePage() {
   return (
     <Layout>
       <div className='mx-auto my-8 max-w-4xl px-4 md:px-0'>
+        {/* Toast notification */}
+        {showToast && (
+          <div className='fixed bottom-4 right-4 z-50 rounded-md bg-green-500 px-4 py-2 text-white shadow-lg'>
+            {actionData?.message}
+          </div>
+        )}
+
         <div className='rounded-xl border border-mpsi bg-white p-8 shadow-sm'>
           <h2 className='mb-6 text-center text-xl font-bold text-[#1D6BF3]'>
             Demande détaillée
           </h2>
 
-          {loading && (
+          {isLoading && (
             <div className='flex justify-center py-4'>
               <div className='size-8 animate-spin rounded-full border-b-2 border-mpsi'></div>
             </div>
@@ -222,7 +307,9 @@ export default function DemandeDetailleePage() {
             </div>
           )}
 
-          <form className='grid grid-cols-1 gap-x-6 gap-y-4 md:grid-cols-2'>
+          <saveFetcher.Form className='grid grid-cols-1 gap-x-6 gap-y-4 md:grid-cols-2'>
+            <input type='hidden' name='action' value='save' />
+
             {/* Nom déposant */}
             <div className='w-full'>
               <label
@@ -276,18 +363,17 @@ export default function DemandeDetailleePage() {
             {/* Panne trouvée */}
             <div className='w-full'>
               <label
-                htmlFor='panne-trouvee'
+                htmlFor='panneTrouvee'
                 className='mb-1 block text-sm font-medium text-gray-700'
               >
                 Panne trouvée
               </label>
               <textarea
-                id='panne-trouvee'
+                id='panneTrouvee'
+                name='panneTrouvee'
                 rows={1}
                 value={panneTrouvee}
-                onChange={(e) => {
-                  setPanneTrouvee(e.target.value);
-                }}
+                onChange={(e) => setPanneTrouvee(e.target.value)}
                 className='w-full rounded-md border px-3 py-2 text-sm transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500'
               />
             </div>
@@ -311,17 +397,16 @@ export default function DemandeDetailleePage() {
             {/* Matériels installés */}
             <div className='w-full'>
               <label
-                htmlFor='materiels-installes'
+                htmlFor='materielsInstalles'
                 className='mb-1 block text-sm font-medium text-gray-700'
               >
                 Matériels installés
               </label>
               <Input
-                id='materiels-installes'
+                id='materielsInstalles'
+                name='materielsInstalles'
                 value={materielsInstalles}
-                onChange={(e) => {
-                  setMaterielsInstalles(e.target.value);
-                }}
+                onChange={(e) => setMaterielsInstalles(e.target.value)}
                 className='w-full rounded-md border px-3 py-2 text-sm transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500'
               />
             </div>
@@ -416,54 +501,65 @@ export default function DemandeDetailleePage() {
                 className='w-full bg-gray-100'
               />
             </div>
-          </form>
 
-          {/* Buttons */}
-          <div className='mt-10 flex justify-center gap-6'>
-            {modified && (
-              <Button
-                className='flex items-center gap-2 bg-blue-500 px-8 hover:bg-blue-600'
-                onClick={handleSaveChanges}
-                disabled={savingChanges}
-              >
-                {savingChanges ? (
-                  <>
-                    <span className='inline-block size-4 animate-spin rounded-full border-2 border-solid border-current border-r-transparent'></span>
-                    <span>Enregistrement...</span>
-                  </>
-                ) : (
-                  <>
-                    <svg
-                      xmlns='http://www.w3.org/2000/svg'
-                      className='size-5'
-                      viewBox='0 0 20 20'
-                      fill='currentColor'
-                    >
-                      <path d='M7.707 10.293a1 1 0 10-1.414 1.414l3 3a1 1 0 001.414 0l3-3a1 1 0 00-1.414-1.414L11 11.586V6h-2v5.586l-1.293-1.293z' />
-                      <path d='M3 15a2 2 0 012-2h10a2 2 0 012 2v2a2 2 0 01-2 2H5a2 2 0 01-2-2v-2z' />
-                    </svg>
-                    <span>Enregistrer</span>
-                  </>
-                )}
-              </Button>
-            )}
+            {/* Submit button for saving changes */}
+            <div className='col-span-full mt-10 flex justify-center'>
+              {modified && (
+                <Button
+                  type='submit'
+                  className='flex items-center gap-2 bg-blue-500 px-8 hover:bg-blue-600'
+                  disabled={isLoading}
+                >
+                  {saveFetcher.state !== 'idle' ? (
+                    <>
+                      <span className='inline-block size-4 animate-spin rounded-full border-2 border-solid border-current border-r-transparent'></span>
+                      <span>Enregistrement...</span>
+                    </>
+                  ) : (
+                    <>
+                      <svg
+                        xmlns='http://www.w3.org/2000/svg'
+                        className='size-5'
+                        viewBox='0 0 20 20'
+                        fill='currentColor'
+                      >
+                        <path d='M7.707 10.293a1 1 0 10-1.414 1.414l3 3a1 1 0 001.414 0l3-3a1 1 0 00-1.414-1.414L11 11.586V6h-2v5.586l-1.293-1.293z' />
+                        <path d='M3 15a2 2 0 012-2h10a2 2 0 012 2v2a2 2 0 01-2 2H5a2 2 0 01-2-2v-2z' />
+                      </svg>
+                      <span>Enregistrer</span>
+                    </>
+                  )}
+                </Button>
+              )}
+            </div>
+          </saveFetcher.Form>
+
+          {/* Form for accept/reject actions */}
+          <div className='mt-6 flex justify-center gap-6'>
+            {/* Button to open reject modal */}
             <Button
               className='bg-red-500 px-8 hover:bg-red-600'
               onClick={() => setShowFailure(true)}
-              disabled={loading || savingChanges}
+              disabled={isLoading}
+              type='button'
             >
               Refuser
             </Button>
-            <Button
-              className='bg-green-500 px-8 hover:bg-green-600'
-              onClick={handleAccept}
-              disabled={loading || savingChanges}
-            >
-              Accepter
-            </Button>
+
+            {/* Form for acceptance */}
+            <Form method='post'>
+              <input type='hidden' name='action' value='accept' />
+              <Button
+                type='submit'
+                className='bg-green-500 px-8 hover:bg-green-600'
+                disabled={isLoading}
+              >
+                Accepter
+              </Button>
+            </Form>
           </div>
 
-          {/* ✅ Success Modal */}
+          {/* Success Modal - Shown after acceptance */}
           <AnimatePresence>
             {showSuccess && (
               <motion.div
@@ -537,7 +633,7 @@ export default function DemandeDetailleePage() {
             )}
           </AnimatePresence>
 
-          {/* ❌ Failure Modal */}
+          {/* Rejection Modal - Updated to use normal Form */}
           <AnimatePresence>
             {showFailure && (
               <motion.div
@@ -576,6 +672,7 @@ export default function DemandeDetailleePage() {
                       />
                     </svg>
                   </motion.div>
+
                   <motion.h3
                     className='mb-2 text-xl font-semibold text-gray-900'
                     initial={{ opacity: 0, y: 10 }}
@@ -584,6 +681,7 @@ export default function DemandeDetailleePage() {
                   >
                     Refuser cette demande
                   </motion.h3>
+
                   <motion.p
                     className='mb-4 text-sm text-gray-600'
                     initial={{ opacity: 0 }}
@@ -594,43 +692,52 @@ export default function DemandeDetailleePage() {
                     <span className='font-medium'>{demande.email}</span> pour
                     l&apos;informer.
                   </motion.p>
-                  <motion.div
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.45 }}
-                  >
-                    <textarea
-                      value={rejectionReason}
-                      onChange={(e) => setRejectionReason(e.target.value)}
-                      className='mb-6 w-full rounded-md border border-gray-300 px-4 py-3 text-sm transition-all duration-200 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200'
-                      placeholder='Introduire une raison de refus...'
-                      rows={3}
-                    />
-                  </motion.div>
-                  <motion.div
-                    className='flex justify-center gap-4'
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.5 }}
-                  >
-                    <Button
-                      onClick={() => setShowFailure(false)}
-                      className='rounded-lg bg-gray-200 px-5 py-2.5 font-medium text-gray-800 transition-all duration-200 hover:bg-gray-300'
+
+                  <Form method='post' onSubmit={() => setShowFailure(false)}>
+                    <motion.div
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.45 }}
                     >
-                      Annuler
-                    </Button>
-                    <Button
-                      onClick={handleReject}
-                      className='rounded-lg bg-[#1D6BF3] px-5 py-2.5 font-medium text-white shadow-md transition-all duration-200 hover:bg-blue-700 hover:shadow-lg'
-                      disabled={loading}
+                      <input type='hidden' name='action' value='reject' />
+                      <textarea
+                        name='rejectionReason'
+                        value={rejectionReason}
+                        onChange={(e) => setRejectionReason(e.target.value)}
+                        className='mb-6 w-full rounded-md border border-gray-300 px-4 py-3 text-sm transition-all duration-200 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200'
+                        placeholder='Introduire une raison de refus...'
+                        rows={3}
+                      />
+                    </motion.div>
+
+                    <motion.div
+                      className='flex justify-center gap-4'
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.5 }}
                     >
-                      {loading ? (
-                        <span className='inline-block size-4 animate-spin rounded-full border-2 border-solid border-current border-r-transparent'></span>
-                      ) : (
-                        'Confirmer'
-                      )}
-                    </Button>
-                  </motion.div>
+                      <Button
+                        onClick={() => setShowFailure(false)}
+                        type='button'
+                        className='rounded-lg bg-gray-200 px-5 py-2.5 font-medium text-gray-800 transition-all duration-200 hover:bg-gray-300'
+                        disabled={isLoading}
+                      >
+                        Annuler
+                      </Button>
+
+                      <Button
+                        type='submit'
+                        className='rounded-lg bg-[#1D6BF3] px-5 py-2.5 font-medium text-white shadow-md transition-all duration-200 hover:bg-blue-700 hover:shadow-lg'
+                        disabled={isLoading}
+                      >
+                        {isLoading ? (
+                          <span className='inline-block size-4 animate-spin rounded-full border-2 border-solid border-current border-r-transparent'></span>
+                        ) : (
+                          'Confirmer'
+                        )}
+                      </Button>
+                    </motion.div>
+                  </Form>
                 </motion.div>
               </motion.div>
             )}
