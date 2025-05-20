@@ -14,8 +14,8 @@ const sections = [
     title: 'Demandes',
     icon: <List className='size-4' />,
     links: [
-      { name: 'Nouvelles demandes', path: '/' },
-      { name: 'Liste des demandes', path: '/demandes/interventions' }, // Placeholder, update if needed
+      { name: 'Nouvelles demandes', path: '/demandes' },
+      { name: 'Liste des demandes', path: '/demandes/all' },
       { name: 'Remplir une demande', path: '/demandes/new' },
     ],
   },
@@ -24,7 +24,7 @@ const sections = [
     icon: <Wrench className='size-4' />,
     links: [
       { name: 'Liste des interventions', path: '/demandes/interventions' },
-      { name: 'Interventions terminées', path: '/' }, // Placeholder, update if needed
+      { name: 'Interventions terminées', path: '/' },
     ],
   },
   {
@@ -86,6 +86,7 @@ export default function Sidebar() {
                     isActive ? 'text-mpsi font-semibold' : ''
                   }`
                 }
+                end
               >
                 <ChevronRight className='size-3.5' />
                 {link.name}

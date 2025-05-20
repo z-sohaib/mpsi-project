@@ -129,7 +129,7 @@ export async function updateDemandeById(
     const response = await fetch(
       `https://itms-mpsi.onrender.com/api/demandes/${demandeId}/`,
       {
-        method: 'PUT',
+        method: 'PATCH',
         headers: {
           Authorization: `Token ${token}`,
           'Content-Type': 'application/json',
@@ -140,6 +140,7 @@ export async function updateDemandeById(
     );
 
     if (!response.ok) {
+      console.error('Failed to update demande:', response.statusText);
       throw new Error(`API returned ${response.status}`);
     }
 

@@ -1,5 +1,6 @@
 import { Filter, RotateCcw, ChevronDown } from 'lucide-react';
 import { useState } from 'react';
+import { DatePicker } from './DatePicker';
 
 interface FilterField {
   id: string;
@@ -7,6 +8,7 @@ interface FilterField {
   placeholder: string;
   options: { value: string; label: string }[];
   onChange: (value: string | null) => void;
+  type?: 'select' | 'date'; // Add type property to identify date filters
 }
 
 interface FilterGroupProps {
@@ -27,50 +29,69 @@ export default function FilterGroup({ filters, onReset }: FilterGroupProps) {
       <div className='flex flex-1 divide-x divide-blue-200'>
         {filters.map((filter) => (
           <div key={filter.id} className='relative flex-1'>
-            <button
-              type='button'
-              onClick={() =>
-                setOpenFilter(openFilter === filter.id ? null : filter.id)
-              }
-              className='flex size-full items-center justify-between px-6 py-3.5 text-base text-gray-700 hover:bg-gray-50'
-            >
-              <span className={filter.value ? '' : 'text-gray-400'}>
-                {filter.value
-                  ? filter.options.find((opt) => opt.value === filter.value)
-                      ?.label
-                  : filter.placeholder}
-              </span>
-              <ChevronDown
-                className={`size-5 text-gray-400 transition-transform duration-200 ${
-                  openFilter === filter.id ? 'rotate-180' : ''
-                }`}
-              />
-            </button>
-
-            {openFilter === filter.id && (
+            {filter.type === 'date' ? (
+              // Date picker UI that matches the style
+              <div className='px-3 py-2'>
+                <DatePicker
+                  id={filter.id}
+                  name={filter.id}
+                  value={filter.value}
+                  onChange={filter.onChange}
+                  placeholder={filter.placeholder}
+                  className='border-0 focus:ring-0'
+                />
+              </div>
+            ) : (
+              // Original dropdown filter
               <>
                 <button
                   type='button'
-                  aria-label='Close filter menu'
-                  className='fixed inset-0 z-40 cursor-default'
-                  onClick={() => setOpenFilter(null)}
-                  onKeyDown={(e) => e.key === 'Escape' && setOpenFilter(null)}
-                />
-                <div className='absolute inset-x-0 top-[calc(100%+4px)] z-50 rounded-md border border-gray-200 bg-white py-1 shadow-lg'>
-                  {filter.options.map((opt) => (
+                  onClick={() =>
+                    setOpenFilter(openFilter === filter.id ? null : filter.id)
+                  }
+                  className='flex size-full items-center justify-between px-6 py-3.5 text-base text-gray-700 hover:bg-gray-50'
+                >
+                  <span className={filter.value ? '' : 'text-gray-400'}>
+                    {filter.value
+                      ? filter.options.find((opt) => opt.value === filter.value)
+                          ?.label
+                      : filter.placeholder}
+                  </span>
+                  <ChevronDown
+                    className={`size-5 text-gray-400 transition-transform duration-200 ${
+                      openFilter === filter.id ? 'rotate-180' : ''
+                    }`}
+                  />
+                </button>
+
+                {openFilter === filter.id && (
+                  <>
                     <button
-                      key={opt.value}
-                      onClick={() => {
-                        filter.onChange(opt.value);
-                        setOpenFilter(null);
-                      }}
-                      className={`w-full px-4 py-2 text-left text-sm transition-colors hover:bg-gray-50 
-                        ${filter.value === opt.value ? 'bg-gray-50 font-medium text-mpsi' : 'text-gray-700'}`}
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
-                </div>
+                      type='button'
+                      aria-label='Close filter menu'
+                      className='fixed inset-0 z-40 cursor-default'
+                      onClick={() => setOpenFilter(null)}
+                      onKeyDown={(e) =>
+                        e.key === 'Escape' && setOpenFilter(null)
+                      }
+                    />
+                    <div className='absolute inset-x-0 top-[calc(100%+4px)] z-50 rounded-md border border-gray-200 bg-white py-1 shadow-lg'>
+                      {filter.options.map((opt) => (
+                        <button
+                          key={opt.value}
+                          onClick={() => {
+                            filter.onChange(opt.value);
+                            setOpenFilter(null);
+                          }}
+                          className={`w-full px-4 py-2 text-left text-sm transition-colors hover:bg-gray-50 
+                            ${filter.value === opt.value ? 'bg-gray-50 font-medium text-mpsi' : 'text-gray-700'}`}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
               </>
             )}
           </div>

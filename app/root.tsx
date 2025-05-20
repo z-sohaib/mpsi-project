@@ -8,6 +8,9 @@ import {
 import type { LinksFunction } from '@remix-run/node';
 import { MotionConfig } from 'framer-motion';
 
+// Import console overrides to silence extension warnings
+import './utils/console-overrides';
+
 import './styles/tailwind.css';
 
 export const links: LinksFunction = () => [
@@ -29,10 +32,16 @@ export function Layout({ children }: { children: React.ReactNode }) {
       <head>
         <meta charSet='utf-8' />
         <meta name='viewport' content='width=device-width, initial-scale=1' />
+        {/* Add a meta tag to silence extension resource warnings */}
+        <meta
+          name='ext-silence-resources'
+          content='pbcpfbcibpcbfbmddogfhcijfpboeaaf'
+        />
         <Meta />
         <Links />
       </head>
-      <body>
+      <body suppressHydrationWarning={true}>
+        {/* The suppressHydrationWarning already helps with this kind of warning */}
         <MotionConfig reducedMotion='user'>{children}</MotionConfig>
         <ScrollRestoration />
         <Scripts />

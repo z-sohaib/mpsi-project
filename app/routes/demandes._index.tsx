@@ -1,11 +1,10 @@
-import { useState, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { LoaderFunctionArgs, json, redirect } from '@remix-run/node';
 import { useLoaderData } from '@remix-run/react';
 import { Button } from '~/components/ui/Button';
-import { Badge } from '~/components/ui/Badge';
 import { ChevronRight, ChevronLeft } from 'lucide-react';
 import Layout from '~/components/layout/Layout';
-import { Table, Column } from '~/components/ui/Table';
+import { Table } from '~/components/ui/Table';
 import { DemandFilters } from '~/components/ui/DemandFilters';
 import { requireUserId } from '~/session.server';
 // Import from server-only module in loader/action
@@ -13,18 +12,25 @@ import { fetchDemandes, getFilterOptions } from '~/models/demandes.server';
 // Import from shared module for client use
 import {
   Demande,
-  Priority,
   FilterOption,
   formatDate,
   filterDemandesByStatus,
 } from '~/models/demandes.shared';
 
-// Simple color mapping for priority badges
-const priorityColors = {
-  Haute: 'bg-red-100/50 text-red-700',
-  Moyenne: 'bg-yellow-100/50 text-yellow-700',
-  Basse: 'bg-green-100/50 text-green-700',
-  'Non définie': 'bg-gray-100 text-gray-700',
+type StatusDemandeType =
+  | 'Acceptee'
+  | 'EnAttente'
+  | 'Rejetee'
+  | 'Terminee'
+  | 'Nouvelle';
+
+// Simple color mapping for status badges
+const statusColors = {
+  Acceptee: 'bg-green-100/50 text-green-700',
+  EnAttente: 'bg-yellow-100/50 text-yellow-700',
+  Rejetee: 'bg-red-100/50 text-red-700',
+  Nouvelle: 'bg-yellow-100/50 text-yellow-700',
+  Terminee: 'bg-green-100/50 text-green-700',
 };
 
 export async function loader({ request }: LoaderFunctionArgs) {
@@ -81,6 +87,10 @@ type LoaderData = {
 export default function NouvellesDemandesPage() {
   const { demandes, filterOptions, error } = useLoaderData<LoaderData>();
   const [filteredDemandes, setFilteredDemandes] = useState<Demande[]>(demandes);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [loading, setLoading] = useState(true);
+  const [errorState, setErrorState] = useState<string | null>(null);
+  const rowsPerPage = 6;
 
   // Define filter configurations based on the data
   const filterConfigs = [
@@ -88,6 +98,7 @@ export default function NouvellesDemandesPage() {
       id: 'date',
       placeholder: 'Date',
       options: filterOptions.dates,
+      type: 'date' as const, // Set as date picker
     },
     {
       id: 'priorite',
@@ -105,9 +116,9 @@ export default function NouvellesDemandesPage() {
   const handleFiltersChange = useCallback(
     (filters: Record<string, string | null>) => {
       const filtered = demandes.filter((demande) => {
-        // Date filter
+        // Date filter - match the specific date
         const matchDate =
-          !filters.date || demande.date_depot.includes(filters.date);
+          !filters.date || demande.date_depot.split('T')[0] === filters.date;
 
         // Priority filter
         const matchPriorite =
@@ -126,55 +137,89 @@ export default function NouvellesDemandesPage() {
       });
 
       setFilteredDemandes(filtered);
+      setCurrentPage(1); // Reset to first page when filters change
     },
     [demandes],
   );
 
-  // Define column accessors as functions to fix type issues
-  const columns: Column<Demande>[] = [
-    {
-      header: 'ID',
-      accessor: (demande) => `DEM-${demande.id.toString().padStart(3, '0')}`,
-    },
-    {
-      header: 'NOM DÉPOSANT',
-      accessor: (demande) => demande.nom_deposant,
-    },
-    {
-      header: 'TYPE MATÉRIEL',
-      accessor: (demande) => demande.type_materiel,
-    },
-    { header: 'MARQUE ET REF', accessor: (demande) => demande.marque },
+  // Calculate pagination
+  const totalPages = Math.ceil(filteredDemandes.length / rowsPerPage);
+
+  // Get current page data
+  const currentData = filteredDemandes.slice(
+    (currentPage - 1) * rowsPerPage,
+    (currentPage - 1) * rowsPerPage + rowsPerPage,
+  );
+
+  // Pagination handlers
+  const handlePrevPage = () => {
+    if (currentPage > 1) {
+      setCurrentPage(currentPage - 1);
+    }
+  };
+
+  const handleNextPage = () => {
+    if (currentPage < totalPages) {
+      setCurrentPage(currentPage + 1);
+    }
+  };
+
+  // Define column accessors
+  const columns = [
+    { header: 'ID', accessor: 'id' as const },
+    { header: 'NOM DÉPOSANT', accessor: 'nom_deposant' as const },
+    { header: 'TYPE MATÉRIEL', accessor: 'type_materiel' as const },
+    { header: 'MARQUE', accessor: 'marque' as const },
     {
       header: 'DATE DÉPÔT',
-      accessor: (demande) => formatDate(demande.date_depot),
+      accessor: 'date_depot' as const,
+      cell: (value: unknown) => formatDate(value as string),
     },
+    { header: 'N° INVENTAIRE', accessor: 'numero_inventaire' as const },
+    { header: 'PANNE DÉCLARÉE', accessor: 'panne_declaree' as const },
     {
-      header: 'N°S/N°I',
-      accessor: (demande) => demande.numero_inventaire,
-    },
-    {
-      header: 'PANNE DÉCLARÉE',
-      accessor: (demande) => demande.panne_declaree,
-    },
-    {
-      header: 'PRIORITÉ',
-      accessor: (demande) => {
-        if (demande.interventions.length === 0) return 'Non définie';
-        return demande.interventions[0].priorite;
-      },
+      header: 'STATUT',
+      accessor: 'status_demande' as const,
       cell: (value: unknown) => (
-        <Badge
-          className={`px-3 py-1.5 ${priorityColors[value as Priority] || ''}`}
+        <div
+          className={`w-full px-3 py-1.5 text-sm font-medium ${statusColors[value as StatusDemandeType]}`}
         >
-          {value as string}
-        </Badge>
+          {value === 'Acceptee'
+            ? 'Acceptée'
+            : value === 'EnAttente'
+              ? 'En Attente'
+              : value === 'Rejetee'
+                ? 'Rejetée'
+                : value === 'Nouvelle'
+                  ? 'Nouvelle'
+                  : value === 'Terminee'
+                    ? 'Terminée'
+                    : String(value)}
+        </div>
       ),
     },
   ];
 
+  // Modify your data fetching function to include loading and error states
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        // Your existing fetch logic here
+        setLoading(false);
+      } catch (err) {
+        setErrorState(
+          err instanceof Error ? err.message : 'Une erreur est survenue',
+        );
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, []);
+
   // Display error message if there was an error loading data
-  if (error) {
+  if (errorState) {
     return (
       <Layout>
         <div className='p-6'>
@@ -198,7 +243,7 @@ export default function NouvellesDemandesPage() {
                   Erreur de chargement
                 </h3>
                 <div className='mt-2 text-sm text-yellow-700'>
-                  <p>{error}</p>
+                  <p>{errorState}</p>
                 </div>
               </div>
             </div>
@@ -235,31 +280,51 @@ export default function NouvellesDemandesPage() {
           addButtonText='Ajouter une demande'
         />
 
-        {filteredDemandes.length === 0 ? (
-          <div className='py-8 text-center'>
-            <p className='text-gray-500'>Aucune nouvelle demande trouvée.</p>
+        {loading ? (
+          <div className='flex justify-center py-8'>
+            <div className='size-10 animate-spin rounded-full border-b-2 border-mpsi'></div>
+          </div>
+        ) : error ? (
+          <div className='py-8 text-center text-red-600'>
+            <p>Erreur lors du chargement des données: {error}</p>
+            <button
+              onClick={() => window.location.reload()}
+              className='mt-2 rounded-md bg-mpsi px-4 py-2 text-white'
+            >
+              Réessayer
+            </button>
           </div>
         ) : (
           <Table
-            data={filteredDemandes}
+            data={currentData}
             columns={columns}
             idField='id'
             linkBaseUrl='/demandes'
           />
         )}
 
-        <div className='flex justify-between'>
+        <div className='flex items-center justify-between'>
           <Button
             variant='outline'
             className='flex items-center gap-2 border-mpsi text-mpsi'
+            onClick={handlePrevPage}
+            disabled={currentPage === 1}
           >
-            <ChevronLeft className='size-4' /> Prev. Data
+            <ChevronLeft className='size-4' /> Données préc.
           </Button>
+
+          <div className='text-sm text-gray-600'>
+            Page {currentPage} sur {totalPages || 1} ({filteredDemandes.length}{' '}
+            résultats)
+          </div>
+
           <Button
             variant='outline'
             className='flex items-center gap-2 border-mpsi text-mpsi'
+            onClick={handleNextPage}
+            disabled={currentPage >= totalPages}
           >
-            Next Data <ChevronRight className='size-4' />
+            Données suiv. <ChevronRight className='size-4' />
           </Button>
         </div>
       </div>

@@ -11,6 +11,7 @@ export interface FilterConfig {
   id: string;
   placeholder: string;
   options: FilterOption[];
+  type?: 'select' | 'date'; // Add type to support date picker
 }
 
 interface FilterState {
@@ -71,6 +72,7 @@ export function DemandFilters({
     value: filters[config.id],
     onChange: (value: string | null) => handleFilterChange(config.id, value),
     options: config.options,
+    type: config.type || 'select', // Default to select if not specified
   }));
 
   return (

@@ -1,14 +1,18 @@
 import { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from '@remix-run/react';
 import { ChevronRight, ChevronLeft } from 'lucide-react';
-import Layout from '../components/layout/Layout';
-import { Button } from '../components/ui/Button';
-import FilterGroup from '../components/ui/FilterGroup';
-import { Table } from '../components/ui/Table';
+import Layout from '~/components/layout/Layout';
+import { Button } from '~/components/ui/Button';
+import { Table } from '~/components/ui/Table';
+import { DemandFilters } from '~/components/ui/DemandFilters';
 
 // Types adaptés aux données de l'API
 type PrioriteType = 'Haute' | 'Moyenne' | 'Basse';
-type StatusDemandeType = 'Acceptee' | 'EnAttente' | 'Rejetee' | 'Terminee';
+type StatusDemandeType =
+  | 'Acceptee'
+  | 'EnAttente'
+  | 'Rejetee'
+  | 'Terminee'
+  | 'Nouvelle';
 
 const statusColors = {
   Acceptee: 'bg-green-100/50 text-green-700',
@@ -52,16 +56,13 @@ interface FilterOption {
   value: string;
 }
 
-export default function NouvellesDemandesPage() {
+export default function AllDemandesPage() {
   const [demandes, setDemandes] = useState<Demande[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [date, setDate] = useState<string | null>(null);
-  const [status, setStatus] = useState<string | null>(null);
-  const [type, setType] = useState<string | null>(null);
+  const [filteredDemandes, setFilteredDemandes] = useState<Demande[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const rowsPerPage = 6;
-  const navigate = useNavigate();
 
   // Récupération des données depuis l'API
   useEffect(() => {
@@ -160,60 +161,47 @@ export default function NouvellesDemandesPage() {
     };
   }, [demandes]);
 
-  const handleReset = () => {
-    setDate(null);
-    setStatus(null);
-    setType(null);
-    setCurrentPage(1); // Reset to first page when filters change
-  };
-
-  const handleRowClick = (demande: Demande) => {
-    navigate(`/demandes/${demande.id}`);
-  };
-
-  // Filters setup
-  const filtersConfig = [
+  // Define filter configurations based on the data
+  const filterConfigs = [
     {
       id: 'date',
       placeholder: 'Date',
-      value: date,
-      onChange: (value: string | null) => {
-        setDate(value);
-        setCurrentPage(1); // Reset to first page when filter changes
-      },
       options: filterOptions.dateOptions,
+      type: 'date' as const,
     },
     {
       id: 'status',
       placeholder: 'Statut',
-      value: status,
-      onChange: (value: string | null) => {
-        setStatus(value);
-        setCurrentPage(1); // Reset to first page when filter changes
-      },
       options: filterOptions.statusOptions,
+      type: 'select' as const,
     },
     {
       id: 'type',
       placeholder: 'Type',
-      value: type,
-      onChange: (value: string | null) => {
-        setType(value);
-        setCurrentPage(1); // Reset to first page when filter changes
-      },
       options: filterOptions.typeOptions,
+      type: 'select' as const,
     },
   ];
 
-  // Apply filters
-  const filteredDemandes = useMemo(() => {
-    return demandes.filter((item) => {
-      const matchDate = !date || item.date_depot.split('T')[0] === date;
-      const matchStatus = !status || item.status_demande === status;
-      const matchType = !type || item.type_materiel === type;
+  // Handle filters change
+  const handleFiltersChange = (filters: Record<string, string | null>) => {
+    const filtered = demandes.filter((item) => {
+      const matchDate =
+        !filters.date || item.date_depot.split('T')[0] === filters.date;
+      const matchStatus =
+        !filters.status || item.status_demande === filters.status;
+      const matchType = !filters.type || item.type_materiel === filters.type;
       return matchDate && matchStatus && matchType;
     });
-  }, [demandes, date, status, type]);
+
+    setFilteredDemandes(filtered);
+    setCurrentPage(1); // Reset to first page when filters change
+  };
+
+  // Initialize filteredDemandes with all demandes when demandes change
+  useEffect(() => {
+    setFilteredDemandes(demandes);
+  }, [demandes]);
 
   // Calculate pagination
   const totalPages = Math.ceil(filteredDemandes.length / rowsPerPage);
@@ -246,6 +234,7 @@ export default function NouvellesDemandesPage() {
     });
   };
 
+  // Define column accessors
   const columns = [
     { header: 'ID', accessor: 'id' as const },
     { header: 'NOM DÉPOSANT', accessor: 'nom_deposant' as const },
@@ -254,16 +243,16 @@ export default function NouvellesDemandesPage() {
     {
       header: 'DATE DÉPÔT',
       accessor: 'date_depot' as const,
-      cell: (value: string) => formatDate(value),
+      cell: (value: unknown) => formatDate(value as string),
     },
     { header: 'N° INVENTAIRE', accessor: 'numero_inventaire' as const },
     { header: 'PANNE DÉCLARÉE', accessor: 'panne_declaree' as const },
     {
       header: 'STATUT',
       accessor: 'status_demande' as const,
-      cell: (value: StatusDemandeType) => (
+      cell: (value: unknown) => (
         <div
-          className={`w-full px-3 py-1.5 text-sm font-medium ${statusColors[value]}`}
+          className={`w-full px-3 py-1.5 text-sm font-medium ${statusColors[value as StatusDemandeType]}`}
         >
           {value === 'Acceptee'
             ? 'Acceptée'
@@ -275,7 +264,7 @@ export default function NouvellesDemandesPage() {
                   ? 'Nouvelle'
                   : value === 'Terminee'
                     ? 'Terminée'
-                    : value}
+                    : String(value)}
         </div>
       ),
     },
@@ -290,15 +279,12 @@ export default function NouvellesDemandesPage() {
           </h2>
         </div>
 
-        <div className='flex flex-wrap items-center justify-between gap-4'>
-          <FilterGroup filters={filtersConfig} onReset={handleReset} />
-          <button
-            onClick={() => navigate('/demandes/new')}
-            className='rounded-md bg-[#1D6BF3] px-6 py-3.5 text-base text-white hover:bg-[#155dc2]'
-          >
-            Ajouter une demande
-          </button>
-        </div>
+        <DemandFilters
+          filterConfigs={filterConfigs}
+          onFiltersChange={handleFiltersChange}
+          addButtonLink='/demandes/new'
+          addButtonText='Ajouter une demande'
+        />
 
         {loading ? (
           <div className='flex justify-center py-8'>
@@ -319,7 +305,8 @@ export default function NouvellesDemandesPage() {
             <Table
               data={currentData}
               columns={columns}
-              onRowClick={handleRowClick}
+              idField='id'
+              linkBaseUrl='/demandes'
             />
 
             <div className='flex items-center justify-between'>
