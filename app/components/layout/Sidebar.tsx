@@ -23,8 +23,8 @@ const sections = [
     title: 'Interventions',
     icon: <Wrench className='size-4' />,
     links: [
-      { name: 'Liste des interventions', path: '/demandes/interventions' },
-      { name: 'Interventions terminées', path: '/' },
+      { name: 'Liste des interventions', path: '/interventions' },
+      { name: 'Interventions terminées', path: '/interventions/done' },
     ],
   },
   {
@@ -32,7 +32,7 @@ const sections = [
     icon: <Puzzle className='size-4' />,
     links: [
       { name: 'Liste des composants', path: '/composants' },
-      { name: 'Ajouter un composant', path: '/composants' }, // Placeholder, update if needed
+      { name: 'Ajouter un composant', path: '/composants/new' }, // Updated to correct path
     ],
   },
   {

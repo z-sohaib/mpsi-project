@@ -77,21 +77,22 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     );
   }
 
-  // Server-side verification (will be handled differently in non-SSR context)
-  const userData = await Login(email as string, password);
+  // Server-side verification with proper typing
+  const userSession = await Login(email as string, password);
 
-  if (!userData) {
+  if (!userSession) {
     return data(
       { errors: { email: 'Email ou mot de passe incorrect', password: null } },
       { status: 400 },
     );
   }
 
+  // Use the userSession object with correct properties
   return createUserSession({
     redirectTo,
     request,
-    access: userData.access,
-    userId: userData.id as string,
+    access: userSession.access,
+    userId: String(userSession.userId),
   });
 };
 

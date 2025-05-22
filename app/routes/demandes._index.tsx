@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { LoaderFunctionArgs, json, redirect } from '@remix-run/node';
 import { useLoaderData } from '@remix-run/react';
 import { Button } from '~/components/ui/Button';
@@ -51,6 +51,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
       return json({
         demandes: nouvelleDemandes,
         filterOptions,
+        isLoading: false,
+        error: null,
       });
     } catch (error) {
       console.error('Error fetching demandes:', error);
@@ -58,6 +60,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       return json({
         demandes: [],
         filterOptions: { dates: [], types: [], priorities: [] },
+        isLoading: false,
         error: 'Failed to load demandes data. Please try again later.',
       });
     }
@@ -81,15 +84,15 @@ type LoaderData = {
     types: FilterOption[];
     priorities: FilterOption[];
   };
-  error?: string;
+  isLoading: boolean;
+  error: string | null;
 };
 
 export default function NouvellesDemandesPage() {
-  const { demandes, filterOptions, error } = useLoaderData<LoaderData>();
+  const { demandes, filterOptions, isLoading, error } =
+    useLoaderData<LoaderData>();
   const [filteredDemandes, setFilteredDemandes] = useState<Demande[]>(demandes);
   const [currentPage, setCurrentPage] = useState(1);
-  const [loading, setLoading] = useState(true);
-  const [errorState, setErrorState] = useState<string | null>(null);
   const rowsPerPage = 6;
 
   // Define filter configurations based on the data
@@ -200,26 +203,8 @@ export default function NouvellesDemandesPage() {
     },
   ];
 
-  // Modify your data fetching function to include loading and error states
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-        // Your existing fetch logic here
-        setLoading(false);
-      } catch (err) {
-        setErrorState(
-          err instanceof Error ? err.message : 'Une erreur est survenue',
-        );
-        setLoading(false);
-      }
-    };
-
-    fetchData();
-  }, []);
-
   // Display error message if there was an error loading data
-  if (errorState) {
+  if (error) {
     return (
       <Layout>
         <div className='p-6'>
@@ -243,7 +228,7 @@ export default function NouvellesDemandesPage() {
                   Erreur de chargement
                 </h3>
                 <div className='mt-2 text-sm text-yellow-700'>
-                  <p>{errorState}</p>
+                  <p>{error}</p>
                 </div>
               </div>
             </div>
@@ -280,19 +265,9 @@ export default function NouvellesDemandesPage() {
           addButtonText='Ajouter une demande'
         />
 
-        {loading ? (
+        {isLoading ? (
           <div className='flex justify-center py-8'>
             <div className='size-10 animate-spin rounded-full border-b-2 border-mpsi'></div>
-          </div>
-        ) : error ? (
-          <div className='py-8 text-center text-red-600'>
-            <p>Erreur lors du chargement des données: {error}</p>
-            <button
-              onClick={() => window.location.reload()}
-              className='mt-2 rounded-md bg-mpsi px-4 py-2 text-white'
-            >
-              Réessayer
-            </button>
           </div>
         ) : (
           <Table

@@ -21,7 +21,7 @@ export default function SignIn() {
   const actionData = useActionData<AuthActionData>();
   const navigation = useNavigation();
   const [searchParams] = useSearchParams();
-  const redirectTo = searchParams.get('redirectTo') || '/rigl';
+  const redirectTo = searchParams.get('redirectTo') || '/dashboard';
 
   const emailRef = useRef<HTMLInputElement>(null);
   const passwordRef = useRef<HTMLInputElement>(null);

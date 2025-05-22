@@ -1,16 +1,28 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { LoaderFunctionArgs, json, redirect } from '@remix-run/node';
-import { useLoaderData } from '@remix-run/react';
+import { Link, useLoaderData } from '@remix-run/react';
 import { Button } from '~/components/ui/Button';
 import { ChevronRight, ChevronLeft } from 'lucide-react';
 import Layout from '~/components/layout/Layout';
 import { Table } from '~/components/ui/Table';
 import { DemandFilters } from '~/components/ui/DemandFilters';
 import { requireUserId } from '~/session.server';
-// Import from server-only module in loader/action
-import { fetchComposants, getFilterOptions } from '~/models/composants.server';
-// Import from shared module for client use
-import { Composant } from '~/models/composants.shared';
+import {
+  fetchInterventions,
+  getInterventionFilterOptions,
+} from '~/models/interventions.server';
+import { Intervention, formatDate } from '~/models/interventions.shared';
+
+// Simple color mapping for status badges
+const statusColors = {
+  Termine: 'bg-green-100/50 text-green-700',
+};
+
+const priorityColors = {
+  Haute: 'bg-red-100/50 text-red-700',
+  Moyenne: 'bg-yellow-100/50 text-yellow-700',
+  Basse: 'bg-blue-100/50 text-blue-700',
+};
 
 export async function loader({ request }: LoaderFunctionArgs) {
   try {
@@ -18,25 +30,31 @@ export async function loader({ request }: LoaderFunctionArgs) {
     const session = await requireUserId(request);
 
     try {
-      const composants = await fetchComposants(session.access);
-      const filterOptions = getFilterOptions(composants);
+      const allInterventions = await fetchInterventions(session.access);
+
+      // Filter interventions to only show those with status "Termine"
+      const termineInterventions = allInterventions.filter(
+        (intervention) => intervention.status === 'Termine',
+      );
+
+      const filterOptions = getInterventionFilterOptions(termineInterventions);
 
       return json({
-        composants,
+        interventions: termineInterventions,
         filterOptions,
       });
     } catch (error) {
-      console.error('Error fetching composants:', error);
+      console.error('Error fetching interventions:', error);
       // Return empty data with error flag
       return json({
-        composants: [],
+        interventions: [],
         filterOptions: {
           dates: [],
-          types: [],
-          models: [],
-          categories: [],
+          statuses: [],
+          priorities: [],
+          techniciens: [],
         },
-        error: 'Failed to load components data. Please try again later.',
+        error: 'Failed to load interventions data. Please try again later.',
       });
     }
   } catch (error) {
@@ -53,30 +71,30 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
 // Define the type returned by the loader
 type LoaderData = {
-  composants: Composant[];
+  interventions: Intervention[];
   filterOptions: {
     dates: { label: string; value: string }[];
-    types: { label: string; value: string }[];
-    models: { label: string; value: string }[];
-    categories: { label: string; value: string }[];
+    statuses: { label: string; value: string }[];
+    priorities: { label: string; value: string }[];
+    techniciens: { label: string; value: string }[];
   };
   error?: string;
 };
 
-export default function ComposantsIndexPage() {
-  const { composants, filterOptions, error } = useLoaderData<LoaderData>();
-  const [filteredComposants, setFilteredComposants] =
-    useState<Composant[]>(composants);
+export default function TermineInterventionsPage() {
+  const { interventions, filterOptions, error } = useLoaderData<LoaderData>();
+  const [filteredInterventions, setFilteredInterventions] =
+    useState<Intervention[]>(interventions);
   const [currentPage, setCurrentPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [errorState, setErrorState] = useState<string | null>(error || null);
   const rowsPerPage = 6;
 
-  // Initialize filtered composants when composants change
+  // Initialize filtered interventions with all interventions when they change
   useEffect(() => {
-    setFilteredComposants(composants);
+    setFilteredInterventions(interventions);
     setLoading(false);
-  }, [composants]);
+  }, [interventions]);
 
   // Use effect to handle API errors
   useEffect(() => {
@@ -109,60 +127,64 @@ export default function ComposantsIndexPage() {
       type: 'date' as const,
     },
     {
-      id: 'type',
-      placeholder: 'Type',
-      options: filterOptions.types,
+      id: 'priorite',
+      placeholder: 'Priorité',
+      options: filterOptions.priorities,
     },
     {
-      id: 'model',
-      placeholder: 'Modèle',
-      options: filterOptions.models,
+      id: 'date_sortie',
+      placeholder: 'Date de sortie',
+      options: filterOptions.dates,
+      type: 'date' as const,
     },
     {
-      id: 'category',
-      placeholder: 'Catégorie',
-      options: filterOptions.categories,
+      id: 'technicien',
+      placeholder: 'Technicien',
+      options: filterOptions.techniciens,
     },
   ];
 
   // Function to handle filter changes
   const handleFiltersChange = useCallback(
     (filters: Record<string, string | null>) => {
-      const filtered = composants.filter((composant) => {
+      const filtered = interventions.filter((intervention) => {
         // Date filter - match the specific date
         const matchDate =
-          !filters.date || composant.created_at.split('T')[0] === filters.date;
+          !filters.date ||
+          intervention.created_at.split('T')[0] === filters.date;
 
-        // Type filter
-        const matchType =
-          !filters.type || composant.type_composant === filters.type;
+        // Priority filter
+        const matchPriority =
+          !filters.priorite || intervention.priorite === filters.priorite;
 
-        // Model filter
-        const matchModel =
-          !filters.model || composant.model_reference === filters.model;
+        // Date sortie filter
+        const matchDateSortie =
+          !filters.date_sortie ||
+          (intervention.date_sortie &&
+            intervention.date_sortie.split('T')[0] === filters.date_sortie);
 
-        // Category filter
-        const matchCategory =
-          !filters.category ||
-          composant.categorie_details?.designation === filters.category;
+        // Technician filter
+        const matchTechnicien =
+          !filters.technicien ||
+          intervention.technicien.toString() === filters.technicien;
 
-        return matchDate && matchType && matchModel && matchCategory;
+        return matchDate && matchPriority && matchDateSortie && matchTechnicien;
       });
 
-      setFilteredComposants(filtered);
+      setFilteredInterventions(filtered);
       setCurrentPage(1); // Reset to first page when filters change
     },
-    [composants],
+    [interventions],
   );
 
   // Calculate pagination
-  const totalPages = Math.ceil(filteredComposants.length / rowsPerPage);
+  const totalPages = Math.ceil(filteredInterventions.length / rowsPerPage);
 
   // Get current page data
   const currentData = useMemo(() => {
     const startIndex = (currentPage - 1) * rowsPerPage;
-    return filteredComposants.slice(startIndex, startIndex + rowsPerPage);
-  }, [filteredComposants, currentPage]);
+    return filteredInterventions.slice(startIndex, startIndex + rowsPerPage);
+  }, [filteredInterventions, currentPage]);
 
   // Pagination handlers
   const handlePrevPage = () => {
@@ -179,63 +201,52 @@ export default function ComposantsIndexPage() {
 
   // Define column accessors
   const columns = [
+    { header: 'ID', accessor: 'id' as const },
     {
-      header: 'IMAGE',
-      accessor: 'image_url' as const,
-      cell: (value: unknown) => (
-        <div className='flex justify-center'>
-          <img
-            src={(value as string) || '/equipement.png'}
-            alt='Composant'
-            className='size-10 rounded-md border border-gray-200 object-cover'
-            onError={(e) => {
-              e.currentTarget.src = '/equipement.png';
-            }}
-          />
-        </div>
-      ),
+      header: 'DATE CRÉATION',
+      accessor: 'created_at' as const,
+      cell: (value: unknown) => formatDate(value as string),
     },
-    { header: 'DÉSIGNATION', accessor: 'designation' as const },
-    { header: 'MODÈLE / REF', accessor: 'model_reference' as const },
     { header: 'N° SÉRIE', accessor: 'numero_serie' as const },
+    { header: 'PANNE TROUVÉE', accessor: 'panne_trouvee' as const },
     {
-      header: 'CATÉGORIE',
-      accessor: (item: Composant) =>
-        item.categorie_details?.designation || 'Non définie',
+      header: 'DATE SORTIE',
+      accessor: 'date_sortie' as const,
+      cell: (value: unknown) =>
+        value ? formatDate(value as string) : 'Non définie',
     },
     {
-      header: 'TYPE',
-      accessor: 'type_composant' as const,
+      header: 'PRIORITÉ',
+      accessor: 'priorite' as const,
       cell: (value: unknown) => (
         <div
-          className={`w-full px-3 py-1.5 text-sm font-medium ${
-            value === 'Nouveau'
-              ? 'bg-blue-100/50 text-blue-700'
-              : 'bg-gray-100/50 text-gray-700'
-          }`}
+          className={`w-full px-3 py-1.5 text-sm font-medium ${priorityColors[value as keyof typeof priorityColors] || 'bg-gray-100 text-gray-700'}`}
         >
           {String(value)}
         </div>
       ),
     },
     {
-      header: 'QUANTITÉ',
-      accessor: 'quantity' as const,
-      cell: (value: unknown) => (value ? String(value) : '0'),
-    },
-    {
-      header: 'DISPONIBILITÉ',
-      accessor: 'disponible' as const,
+      header: 'STATUT',
+      accessor: 'status' as const,
       cell: (value: unknown) => (
         <div
-          className={`w-full px-3 py-1.5 text-sm font-medium ${
-            value === true
-              ? 'bg-green-100/50 text-green-700'
-              : 'bg-red-100/50 text-red-700'
-          }`}
+          className={`w-full px-3 py-1.5 text-sm font-medium ${statusColors[value as keyof typeof statusColors] || 'bg-gray-100 text-gray-700'}`}
         >
-          {value === true ? 'Disponible' : 'Non disponible'}
+          {value === 'Termine' ? 'Terminé' : String(value)}
         </div>
+      ),
+    },
+    {
+      header: 'DEMANDE',
+      accessor: 'demande_id' as const,
+      cell: (value: unknown) => (
+        <Link
+          to={`/demandes/${value}`}
+          className='inline-flex items-center justify-center rounded-md bg-blue-50 px-3 py-1.5 text-sm font-medium text-blue-600 transition-colors hover:bg-blue-100'
+        >
+          Voir
+        </Link>
       ),
     },
   ];
@@ -245,17 +256,15 @@ export default function ComposantsIndexPage() {
       <div className='space-y-6 px-4 md:px-8'>
         <div className='flex flex-wrap items-center justify-between gap-4'>
           <h2 className='text-2xl font-semibold text-mpsi'>
-            Composants{' '}
-            <span className='text-black'>/ Liste des composants</span>
+            Interventions{' '}
+            <span className='text-black'>/ Interventions terminées</span>
           </h2>
         </div>
 
         <DemandFilters
           filterConfigs={filterConfigs}
           onFiltersChange={handleFiltersChange}
-          addButtonLink='/composants/new'
-          addButtonText='Ajouter un composant'
-          showAddButton={true}
+          showAddButton={false}
         />
 
         {loading ? (
@@ -278,7 +287,7 @@ export default function ComposantsIndexPage() {
               data={currentData}
               columns={columns}
               idField='id'
-              linkBaseUrl='/composants'
+              linkBaseUrl='/interventions'
             />
 
             <div className='flex items-center justify-between'>
@@ -293,7 +302,7 @@ export default function ComposantsIndexPage() {
 
               <div className='text-sm text-gray-600'>
                 Page {currentPage} sur {totalPages || 1} (
-                {filteredComposants.length} résultats)
+                {filteredInterventions.length} résultats)
               </div>
 
               <Button

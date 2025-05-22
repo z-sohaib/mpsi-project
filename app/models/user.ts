@@ -2,12 +2,14 @@
  * User type definition that matches the API response structure
  */
 export interface User {
-  id: string | number; // Using the user_id from API but renamed to id for consistency
-  user_id: number;
+  id: number;
+  username: string;
   email: string;
-  is_admin: boolean;
-  refresh: string;
-  access: string;
+  first_name?: string;
+  last_name?: string;
+  role?: string;
+  is_staff?: boolean;
+  is_active?: boolean;
 }
 
 export interface UserSession {
@@ -24,14 +26,64 @@ export interface AuthResponse {
   access: string;
 }
 
-// Map the API response to our User type
-export function mapApiResponseToUser(data: AuthResponse): User {
-  return {
-    id: data.user_id, // Map user_id to id for internal use
-    user_id: data.user_id,
-    email: data.email,
-    is_admin: data.is_admin,
-    refresh: data.refresh,
-    access: data.access,
-  };
+/**
+ * Fetch user profile from the API
+ */
+export async function fetchUserProfile(token: string): Promise<User | null> {
+  try {
+    const response = await fetch(
+      'https://itms-mpsi.onrender.com/api/users/me/',
+      {
+        headers: {
+          Authorization: `Token ${token}`,
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+      },
+    );
+
+    if (!response.ok) {
+      if (response.status === 401) {
+        throw new Error('Authentication failed');
+      }
+      throw new Error(`API returned ${response.status}`);
+    }
+
+    return (await response.json()) as User;
+  } catch (error) {
+    console.error('Failed to fetch user profile:', error);
+    return null;
+  }
+}
+
+/**
+ * Authenticate user with email and password
+ */
+export async function Login(
+  email: string,
+  password: string,
+): Promise<UserSession | null> {
+  try {
+    const response = await fetch('https://itms-mpsi.onrender.com/api/token/', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ email, password }),
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const data = await response.json();
+
+    return {
+      userId: data.user_id,
+      access: data.access,
+    };
+  } catch (error) {
+    console.error('Login failed:', error);
+    return null;
+  }
 }

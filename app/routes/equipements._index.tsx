@@ -1,170 +1,229 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import Layout from '~/components/layout/Layout';
+import { useState, useEffect, useCallback } from 'react';
+import { LoaderFunctionArgs, json, redirect } from '@remix-run/node';
+import { useLoaderData } from '@remix-run/react';
 import { Button } from '~/components/ui/Button';
-import FilterGroup from '~/components/ui/FilterGroup';
+import { ChevronRight, ChevronLeft } from 'lucide-react';
+import Layout from '~/components/layout/Layout';
 import { Table } from '~/components/ui/Table';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { DemandFilters } from '~/components/ui/DemandFilters';
+import { requireUserId } from '~/session.server';
+// Import from server-only module in loader/action
+import {
+  fetchEquipements,
+  getFilterOptions,
+} from '~/models/equipements.server';
+// Import from shared module for client use
+import {
+  Equipement,
+  FilterOption,
+  formatDate,
+} from '~/models/equipements.shared';
 
-interface Equipement {
-  id: number;
-  model_reference: string | null;
-  created_at: string;
-  numero_serie: string;
-  designation: string;
-  observation: string | null;
-  numero_inventaire: string | null;
-  image: string | null;
+export async function loader({ request }: LoaderFunctionArgs) {
+  try {
+    // Check if user is authenticated, this will throw a redirect if not
+    const session = await requireUserId(request);
+
+    // User is authenticated, fetch equipements data
+    try {
+      const equipements = await fetchEquipements(session.access);
+
+      // Generate filter options from the data
+      const filterOptions = getFilterOptions(equipements);
+
+      return json({
+        equipements,
+        filterOptions,
+      });
+    } catch (error) {
+      console.error('Error fetching equipements:', error);
+      // Return empty data with error flag
+      return json({
+        equipements: [],
+        filterOptions: { dates: [], models: [], inventories: [] },
+        error: 'Failed to load equipements data. Please try again later.',
+      });
+    }
+  } catch (error) {
+    // Handle authentication redirect
+    if (error instanceof Response && error.status === 302) {
+      throw error;
+    }
+
+    // Other errors
+    console.error('Authentication error:', error);
+    throw redirect('/auth');
+  }
 }
 
-export default function ListeEquipementsPage() {
-  const navigate = useNavigate();
-  const [equipements, setEquipements] = useState<Equipement[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [date, setDate] = useState<string | null>(null);
+// Define the type returned by the loader
+type LoaderData = {
+  equipements: Equipement[];
+  filterOptions: {
+    dates: FilterOption[];
+    models: FilterOption[];
+    inventories: FilterOption[];
+  };
+  error?: string;
+};
+
+export default function EquipementsIndexPage() {
+  const { equipements, filterOptions, error } = useLoaderData<LoaderData>();
+  const [filteredEquipements, setFilteredEquipements] =
+    useState<Equipement[]>(equipements);
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 6;
+  const [loading, setLoading] = useState(true);
+  const [errorState, setErrorState] = useState<string | null>(null);
+  const rowsPerPage = 6;
 
-  // Fetch equipements from the backend
+  // Define filter configurations based on the data
+  const filterConfigs = [
+    {
+      id: 'date',
+      placeholder: 'Date',
+      options: filterOptions.dates,
+      type: 'date' as const, // Set as date picker
+    },
+    {
+      id: 'model',
+      placeholder: 'Modèle',
+      options: filterOptions.models,
+    },
+    {
+      id: 'inventaire',
+      placeholder: 'N° Inventaire',
+      options: filterOptions.inventories,
+    },
+  ];
+
+  // Function to handle filter changes
+  const handleFiltersChange = useCallback(
+    (filters: Record<string, string | null>) => {
+      const filtered = equipements.filter((equipement) => {
+        // Date filter - match the specific date
+        const matchDate =
+          !filters.date || equipement.created_at.split('T')[0] === filters.date;
+
+        // Model filter
+        const matchModel =
+          !filters.model || equipement.model_reference === filters.model;
+
+        // Inventory number filter
+        const matchInventaire =
+          !filters.inventaire ||
+          equipement.numero_inventaire === filters.inventaire;
+
+        return matchDate && matchModel && matchInventaire;
+      });
+
+      setFilteredEquipements(filtered);
+      setCurrentPage(1); // Reset to first page when filters change
+    },
+    [equipements],
+  );
+
+  // Initialize filtered equipements with all equipements when they change
   useEffect(() => {
-    const fetchEquipements = async () => {
+    setFilteredEquipements(equipements);
+    setLoading(false);
+  }, [equipements]);
+
+  // Calculate pagination
+  const totalPages = Math.ceil(filteredEquipements.length / rowsPerPage);
+
+  // Get current page data
+  const currentData = filteredEquipements.slice(
+    (currentPage - 1) * rowsPerPage,
+    (currentPage - 1) * rowsPerPage + rowsPerPage,
+  );
+
+  // Pagination handlers
+  const handlePrevPage = () => {
+    if (currentPage > 1) {
+      setCurrentPage(currentPage - 1);
+    }
+  };
+
+  const handleNextPage = () => {
+    if (currentPage < totalPages) {
+      setCurrentPage(currentPage + 1);
+    }
+  };
+
+  // Define column accessors
+  const columns = [
+    { header: 'ID', accessor: 'id' as const },
+    { header: 'RÉFÉRENCE', accessor: 'model_reference' as const },
+    {
+      header: 'DATE CRÉATION',
+      accessor: 'created_at' as const,
+      cell: (value: unknown) => formatDate(value as string),
+    },
+    { header: 'N° SÉRIE', accessor: 'numero_serie' as const },
+    { header: 'DÉSIGNATION', accessor: 'designation' as const },
+    { header: 'N° INVENTAIRE', accessor: 'numero_inventaire' as const },
+    { header: 'OBSERVATION', accessor: 'observation' as const },
+  ];
+
+  // Modify your data fetching function to include loading and error states
+  useEffect(() => {
+    const fetchData = async () => {
       try {
-        const token = localStorage.getItem('token');
-        if (!token) {
-          navigate('/auth', { replace: true });
-          return;
-        }
-
         setLoading(true);
-        const response = await fetch(
-          'https://itms-mpsi.onrender.com/api/equipements/',
-          {
-            headers: {
-              Authorization: `Token ${token}`,
-              'Content-Type': 'application/json',
-              Accept: 'application/json',
-            },
-          },
-        );
-
-        if (response.ok) {
-          const data = await response.json();
-          setEquipements(data);
-        } else if (response.status === 401) {
-          console.warn('API returned 401. Invalid token. Logging out...');
-          localStorage.removeItem('token');
-          navigate('/auth', { replace: true });
-        } else {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
+        // The actual data is already loaded by the loader
+        setLoading(false);
       } catch (err) {
-        console.error('Failed to fetch equipements:', err);
-        setError('Failed to load equipment. Please try again later.');
-      } finally {
+        setErrorState(
+          err instanceof Error ? err.message : 'Une erreur est survenue',
+        );
         setLoading(false);
       }
     };
 
-    fetchEquipements();
-  }, [navigate]);
+    fetchData();
+  }, []);
 
-  const handleReset = () => {
-    setDate(null);
-    setCurrentPage(1); // Reset to first page on filter reset
-  };
-
-  const filterOptions = [
-    {
-      id: 'date',
-      placeholder: 'Date',
-      value: date,
-      onChange: setDate,
-      options: [{ label: '18 May 2025', value: '2025-05-18' }],
-    },
-  ];
-
-  const filteredEquipements = equipements.filter((equipement) => {
-    let matches = true;
-    if (date) {
-      matches =
-        matches &&
-        new Date(equipement.created_at).toISOString().split('T')[0] === date;
-    }
-    return matches;
-  });
-
-  // Pagination logic
-  const totalPages = Math.ceil(filteredEquipements.length / itemsPerPage);
-  const paginatedEquipements = filteredEquipements.slice(
-    (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage,
-  );
-
-  const handlePrevPage = () => {
-    if (currentPage > 1) setCurrentPage(currentPage - 1);
-  };
-
-  const handleNextPage = () => {
-    if (currentPage < totalPages) setCurrentPage(currentPage + 1);
-  };
-
-  const columns = [
-    {
-      header: 'PIC',
-      accessor: 'image' as const,
-      cell: (value: string | null) => (
-        <div className='flex justify-center'>
-          <img
-            width={40}
-            src={value || '/equipement.png'}
-            alt='Équipement'
-            className='size-10 rounded-md border border-gray-200 object-cover'
-          />
-        </div>
-      ),
-    },
-    { header: 'Désignation', accessor: 'designation' as const },
-    { header: 'Model / référence', accessor: 'model_reference' as const },
-    { header: 'Numéro de série', accessor: 'numero_serie' as const },
-    { header: "N° d'inventaire", accessor: 'numero_inventaire' as const },
-    {
-      header: 'Observation',
-      accessor: 'observation' as const,
-      cell: (value: string | null) => (
-        <Button variant='outline' className='border-mpsi text-mpsi'>
-          {value || 'N/A'}
-        </Button>
-      ),
-    },
-  ];
-
-  if (loading) {
+  // Display error message if there was an error loading data
+  if (errorState) {
     return (
       <Layout>
-        <div className='flex min-h-screen items-center justify-center bg-gray-100'>
-          <div className='text-center'>
-            <div className='mx-auto mb-2 size-10 animate-spin rounded-full border-4 border-gray-300 border-t-blue-600'></div>
-            <p className='text-gray-600'>Chargement des équipements...</p>
+        <div className='p-6'>
+          <div className='mb-6 rounded-md bg-yellow-50 p-4'>
+            <div className='flex'>
+              <div className='shrink-0'>
+                <svg
+                  className='size-5 text-yellow-400'
+                  viewBox='0 0 20 20'
+                  fill='currentColor'
+                >
+                  <path
+                    fillRule='evenodd'
+                    d='M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z'
+                    clipRule='evenodd'
+                  />
+                </svg>
+              </div>
+              <div className='ml-3'>
+                <h3 className='text-sm font-medium text-yellow-800'>
+                  Erreur de chargement
+                </h3>
+                <div className='mt-2 text-sm text-yellow-700'>
+                  <p>{errorState}</p>
+                </div>
+              </div>
+            </div>
           </div>
-        </div>
-      </Layout>
-    );
-  }
-
-  if (error) {
-    return (
-      <Layout>
-        <div className='flex min-h-screen items-center justify-center bg-gray-100'>
-          <div className='max-w-md rounded-lg bg-white p-6 shadow-lg'>
-            <h2 className='mb-4 text-xl font-semibold text-red-600'>Erreur</h2>
-            <p className='text-gray-700'>{error}</p>
-            <button
+          <h2 className='text-2xl font-semibold text-mpsi'>
+            Équipements{' '}
+            <span className='text-black'>/ Liste des équipements</span>
+          </h2>
+          <div className='mt-4'>
+            <Button
               onClick={() => window.location.reload()}
-              className='mt-4 rounded-md bg-blue-600 px-4 py-2 text-white hover:bg-blue-700'
+              className='bg-mpsi text-white'
             >
               Réessayer
-            </button>
+            </Button>
           </div>
         </div>
       </Layout>
@@ -181,34 +240,59 @@ export default function ListeEquipementsPage() {
           </h2>
         </div>
 
-        <div className='flex flex-wrap items-center justify-between gap-4'>
-          <FilterGroup filters={filterOptions} onReset={handleReset} />
-          <button
-            onClick={() => navigate('/equipements/new')}
-            className='rounded-md bg-[#1D6BF3] px-6 py-3.5 text-base text-white hover:bg-[#155dc2]'
-          >
-            Ajouter un équipement
-          </button>
-        </div>
+        <DemandFilters
+          filterConfigs={filterConfigs}
+          onFiltersChange={handleFiltersChange}
+          addButtonLink='/equipements/new'
+          addButtonText='Ajouter un équipement'
+          showAddButton={true}
+        />
 
-        <Table data={paginatedEquipements} columns={columns} />
+        {loading ? (
+          <div className='flex justify-center py-8'>
+            <div className='size-10 animate-spin rounded-full border-b-2 border-mpsi'></div>
+          </div>
+        ) : error ? (
+          <div className='py-8 text-center text-red-600'>
+            <p>Erreur lors du chargement des données: {error}</p>
+            <button
+              onClick={() => window.location.reload()}
+              className='mt-2 rounded-md bg-mpsi px-4 py-2 text-white'
+            >
+              Réessayer
+            </button>
+          </div>
+        ) : (
+          <Table
+            data={currentData}
+            columns={columns}
+            idField='id'
+            linkBaseUrl='/equipements'
+          />
+        )}
 
-        <div className='flex justify-between'>
+        <div className='flex items-center justify-between'>
           <Button
             variant='outline'
             className='flex items-center gap-2 border-mpsi text-mpsi'
             onClick={handlePrevPage}
             disabled={currentPage === 1}
           >
-            <ChevronLeft className='size-4' /> Prev. Data
+            <ChevronLeft className='size-4' /> Données préc.
           </Button>
+
+          <div className='text-sm text-gray-600'>
+            Page {currentPage} sur {totalPages || 1} (
+            {filteredEquipements.length} résultats)
+          </div>
+
           <Button
             variant='outline'
             className='flex items-center gap-2 border-mpsi text-mpsi'
             onClick={handleNextPage}
-            disabled={currentPage === totalPages}
+            disabled={currentPage >= totalPages}
           >
-            Next Data <ChevronRight className='size-4' />
+            Données suiv. <ChevronRight className='size-4' />
           </Button>
         </div>
       </div>

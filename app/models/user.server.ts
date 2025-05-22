@@ -1,4 +1,4 @@
-import { User, AuthResponse, mapApiResponseToUser } from './user';
+import { AuthResponse, UserSession } from './user';
 
 export interface UserResponse {
   id: string;
@@ -10,12 +10,12 @@ export interface UserResponse {
  * Verify user login credentials against the API
  * @param email - User email
  * @param password - User password
- * @returns User if successful, null if failed
+ * @returns UserSession if successful, null if failed
  */
 export async function Login(
   email: string,
   password: string,
-): Promise<User | null> {
+): Promise<UserSession | null> {
   try {
     const response = await fetch('https://itms-mpsi.onrender.com/api/login/', {
       method: 'POST',
@@ -29,8 +29,10 @@ export async function Login(
 
     const data = (await response.json()) as AuthResponse;
 
-    // Map the API response to our User type
-    return mapApiResponseToUser(data);
+    return {
+      userId: data.user_id,
+      access: data.access,
+    };
   } catch (error) {
     console.error('Login verification error:', error);
     return null;
