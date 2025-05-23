@@ -6,8 +6,7 @@ import MaintenanceChart from '../components/ui/MaintenanceChart';
 import SmartInsights from '../components/ui/SmartInsights';
 import ClientOnly from '../components/ui/ClientOnly';
 import ComponentsTable from '../components/ui/Tableau';
-import Sidebar from '../components/layout/Sidebar';
-import Topbar from '../components/layout/Topbar';
+import Layout from '~/components/layout/Layout';
 import { requireUserId } from '~/session.server';
 import {
   DashboardData,
@@ -218,103 +217,37 @@ export default function Dashboard() {
   // Show error notification if there was an error loading data
   if (loaderError) {
     return (
-      <div className='flex min-h-screen bg-gray-100'>
-        <div className='hidden lg:block'>
-          <Sidebar />
-        </div>
-        <div className='flex flex-1 flex-col'>
-          <Topbar />
-          <div className='flex-1 overflow-y-auto p-4 sm:p-6'>
-            {/* Error notification */}
-            <div className='mb-4 rounded-md bg-yellow-50 p-4'>
-              <div className='flex'>
-                <div className='shrink-0'>
-                  <svg
-                    className='size-5 text-yellow-400'
-                    viewBox='0 0 20 20'
-                    fill='currentColor'
-                  >
-                    <path
-                      fillRule='evenodd'
-                      d='M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z'
-                      clipRule='evenodd'
-                    />
-                  </svg>
-                </div>
-                <div className='ml-3'>
-                  <h3 className='text-sm font-medium text-yellow-800'>Note</h3>
-                  <div className='mt-2 text-sm text-yellow-700'>
-                    <p>{loaderError}</p>
-                  </div>
+      <Layout>
+        <div className='flex-1 overflow-y-auto p-4 sm:p-6'>
+          {/* Error notification */}
+          <div className='mb-4 rounded-md bg-yellow-50 p-4'>
+            <div className='flex'>
+              <div className='shrink-0'>
+                <svg
+                  className='size-5 text-yellow-400'
+                  viewBox='0 0 20 20'
+                  fill='currentColor'
+                >
+                  <path
+                    fillRule='evenodd'
+                    d='M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z'
+                    clipRule='evenodd'
+                  />
+                </svg>
+              </div>
+              <div className='ml-3'>
+                <h3 className='text-sm font-medium text-yellow-800'>Note</h3>
+                <div className='mt-2 text-sm text-yellow-700'>
+                  <p>{loaderError}</p>
                 </div>
               </div>
-            </div>
-
-            <h1 className='mb-4 text-center text-2xl font-bold text-blue-600 sm:text-3xl'>
-              Tableau de bord
-            </h1>
-
-            <div className='mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5'>
-              {kpiCards.map((kpi, index) => (
-                <KpiCard
-                  key={index}
-                  title={kpi.title}
-                  value={kpi.value}
-                  trend={kpi.trend}
-                  icon={kpi.icon}
-                />
-              ))}
-            </div>
-            <div className='mb-6 grid grid-cols-1 gap-6 md:grid-cols-2'>
-              <div className='relative rounded-xl border border-gray-200/50 bg-white/90 p-6 shadow-lg backdrop-blur-md'>
-                <div className='absolute inset-0 -z-10 rounded-xl bg-gradient-to-r from-gray-500 to-gray-300 opacity-20' />
-                <div className='mb-4 flex flex-col items-center gap-3 sm:flex-row sm:justify-between'>
-                  <h2 className='text-xl font-semibold text-blue-600'>
-                    Demandes de maintenance
-                  </h2>
-                </div>
-                <div className='h-64'>
-                  <ClientOnly
-                    fallback={
-                      <div className='flex h-full items-center justify-center bg-gray-500'>
-                        Chargement du graphique...
-                      </div>
-                    }
-                  >
-                    {() => <MaintenanceChart data={chartData} />}
-                  </ClientOnly>
-                </div>
-              </div>
-
-              <SmartInsights
-                statsData={statsData}
-                selectedAnalysisType={selectedAnalysisType}
-                setSelectedAnalysisType={setSelectedAnalysisType}
-                selectedYear={selectedYear}
-                setSelectedYear={setSelectedYear}
-                availableYears={availableYears}
-              />
-            </div>
-            <div className='mt-6 overflow-x-auto rounded-xl border border-gray-200/50 bg-white/90 p-6 shadow-lg backdrop-blur-md'>
-              <ComponentsTable />
             </div>
           </div>
-        </div>
-      </div>
-    );
-  }
 
-  return (
-    <div className='flex min-h-screen bg-gray-100'>
-      <div className='hidden lg:block'>
-        <Sidebar />
-      </div>
-      <div className='flex flex-1 flex-col'>
-        <Topbar />
-        <div className='flex-1 overflow-y-auto p-4 sm:p-6'>
           <h1 className='mb-4 text-center text-2xl font-bold text-blue-600 sm:text-3xl'>
             Tableau de bord
           </h1>
+
           <div className='mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5'>
             {kpiCards.map((kpi, index) => (
               <KpiCard
@@ -356,8 +289,62 @@ export default function Dashboard() {
               availableYears={availableYears}
             />
           </div>
+          <div className='mt-6 overflow-x-auto rounded-xl border border-gray-200/50 bg-white/90 p-6 shadow-lg backdrop-blur-md'>
+            <ComponentsTable />
+          </div>
+        </div>
+      </Layout>
+    );
+  }
+
+  return (
+    <Layout>
+      <div className='flex-1 overflow-y-auto p-4 sm:p-6'>
+        <h1 className='mb-4 text-center text-2xl font-bold text-blue-600 sm:text-3xl'>
+          Tableau de bord
+        </h1>
+        <div className='mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5'>
+          {kpiCards.map((kpi, index) => (
+            <KpiCard
+              key={index}
+              title={kpi.title}
+              value={kpi.value}
+              trend={kpi.trend}
+              icon={kpi.icon}
+            />
+          ))}
+        </div>
+        <div className='mb-6 grid grid-cols-1 gap-6 md:grid-cols-2'>
+          <div className='relative rounded-xl border border-gray-200/50 bg-white/90 p-6 shadow-lg backdrop-blur-md'>
+            <div className='absolute inset-0 -z-10 rounded-xl bg-gradient-to-r from-gray-500 to-gray-300 opacity-20' />
+            <div className='mb-4 flex flex-col items-center gap-3 sm:flex-row sm:justify-between'>
+              <h2 className='text-xl font-semibold text-blue-600'>
+                Demandes de maintenance
+              </h2>
+            </div>
+            <div className='h-64'>
+              <ClientOnly
+                fallback={
+                  <div className='flex h-full items-center justify-center bg-gray-500'>
+                    Chargement du graphique...
+                  </div>
+                }
+              >
+                {() => <MaintenanceChart data={chartData} />}
+              </ClientOnly>
+            </div>
+          </div>
+
+          <SmartInsights
+            statsData={statsData}
+            selectedAnalysisType={selectedAnalysisType}
+            setSelectedAnalysisType={setSelectedAnalysisType}
+            selectedYear={selectedYear}
+            setSelectedYear={setSelectedYear}
+            availableYears={availableYears}
+          />
         </div>
       </div>
-    </div>
+    </Layout>
   );
 }

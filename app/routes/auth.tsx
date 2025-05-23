@@ -87,11 +87,15 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     );
   }
 
+  console.log('User session:', userSession);
+
   // Use the userSession object with correct properties
   return createUserSession({
     redirectTo,
     request,
     access: userSession.access,
+    username: String(userSession.username),
+    email: String(userSession.email),
     userId: String(userSession.userId),
   });
 };

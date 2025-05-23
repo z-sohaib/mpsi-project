@@ -15,12 +15,15 @@ export interface User {
 export interface UserSession {
   userId: string | number;
   access: string;
+  username?: string;
+  email?: string;
 }
 
 // Define auth response type
 export interface AuthResponse {
   user_id: number;
   email: string;
+  username: string;
   is_admin: boolean;
   refresh: string;
   access: string;

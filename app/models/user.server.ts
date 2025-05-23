@@ -32,6 +32,8 @@ export async function Login(
     return {
       userId: data.user_id,
       access: data.access,
+      username: data.username,
+      email: data.email,
     };
   } catch (error) {
     console.error('Login verification error:', error);

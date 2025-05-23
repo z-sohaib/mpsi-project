@@ -1,16 +1,24 @@
 // components/layout/Layout.tsx
 
+import { ReactNode } from 'react';
 import Sidebar from './Sidebar';
 import Topbar from './Topbar';
 
-export default function Layout({ children }: { children: React.ReactNode }) {
+interface LayoutProps {
+  children: ReactNode;
+}
+
+export default function Layout({ children }: LayoutProps) {
   return (
-    <div className='flex'>
-      <Sidebar />
-      <main className='min-h-screen flex-1 bg-gray-50'>
+    <div className='flex min-h-screen bg-gray-100'>
+      <div className='hidden lg:block'>
+        <Sidebar />
+      </div>
+      <div className='flex flex-1 flex-col'>
+        {/* Pass userInfo to Topbar */}
         <Topbar />
-        <div className='py-6'>{children}</div>
-      </main>
+        <main className='flex-1 overflow-y-auto'>{children}</main>
+      </div>
     </div>
   );
 }

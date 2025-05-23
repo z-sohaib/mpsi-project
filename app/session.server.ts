@@ -17,6 +17,8 @@ export const sessionStorage = createCookieSessionStorage({
 
 const USER_SESSION_KEY = 'userId';
 const TOKEN_SESSION_KEY = 'access';
+const USERNAME_SESSION_KEY = 'username';
+const EMAIL_SESSION_KEY = 'email';
 
 export async function getSession(request: Request) {
   const cookie = request.headers.get('Cookie');
@@ -35,16 +37,50 @@ export async function getUserId(
   };
 }
 
+/**
+ * Get user info from the session
+ */
+export async function getUserInfo(
+  request: Request,
+): Promise<UserSession | null> {
+  try {
+    const session = await getSession(request);
+    const token = session.get('userToken');
+
+    if (!token) {
+      return null;
+    }
+
+    const userId = session.get('userId');
+    const username = session.get('username');
+    const email = session.get('email');
+
+    // Return the basic user session
+    return {
+      userId,
+      access: token,
+      username,
+      email,
+    };
+  } catch (error) {
+    console.error('Error getting user info:', error);
+    return null;
+  }
+}
+
 // Add a mock function for getUserById as this wasn't defined
 // In a real application, this would fetch the user from the API or database
-async function getUserById(userId: string | number): Promise<User | null> {
+async function getUserById(
+  userId: string | number,
+  token: string,
+): Promise<User | null> {
   // This is a placeholder - in a real app, you would fetch the user from your API
   try {
     const response = await fetch(
-      `https://itms-mpsi.onrender.com/api/users/${userId}/`,
+      `https://itms-mpsi.onrender.com/api/admin/users/${userId}/`,
       {
         headers: {
-          Authorization: `Bearer ${localStorage.getItem('token')}`,
+          Authorization: `Bearer ${token}`,
         },
       },
     );
@@ -64,7 +100,7 @@ export async function getUser(request: Request) {
   const session = await getUserId(request);
   if (!session || session.userId === undefined) return null;
 
-  const user = await getUserById(session.userId);
+  const user = await getUserById(session.userId, session.access);
   if (user) return user;
 
   throw await logout(request);
@@ -81,7 +117,7 @@ export async function requireUserId(request: Request) {
 export async function requireUser(request: Request) {
   const session = await requireUserId(request);
 
-  const user = await getUserById(session.userId);
+  const user = await getUserById(session.userId, session.access);
   if (user) return user;
 
   throw await logout(request);
@@ -91,16 +127,22 @@ export async function createUserSession({
   request,
   userId,
   access,
+  username,
+  email,
   redirectTo,
 }: {
   request: Request;
   userId: string;
   access: string;
+  username: string;
+  email: string;
   redirectTo: string;
 }) {
   const session = await getSession(request);
   session.set(USER_SESSION_KEY, userId);
   session.set(TOKEN_SESSION_KEY, access);
+  session.set(USERNAME_SESSION_KEY, username);
+  session.set(EMAIL_SESSION_KEY, email);
   return redirect(redirectTo, {
     headers: {
       'Set-Cookie': await sessionStorage.commitSession(session, {
