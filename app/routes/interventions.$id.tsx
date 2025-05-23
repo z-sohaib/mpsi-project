@@ -18,7 +18,12 @@ import {
 import { fetchDemandeById } from '~/models/demandes.server';
 import { Intervention } from '~/models/interventions.shared';
 import { fetchComposants, Composant } from '~/models/composant.server';
+import { createEquipement } from '~/models/equipements.server';
 import { Equipement } from '~/models/equipements.shared';
+import {
+  sendRepairCompletedEmail,
+  sendEquipmentIrreparableEmail,
+} from '~/utils/email.server';
 
 // Define types for the loader and action data
 type ActionData = {
@@ -28,11 +33,12 @@ type ActionData = {
     priorite?: string;
     date_sortie?: string;
     numero_serie?: string;
+    cause?: string;
     form?: string;
   };
   success?: boolean;
   message?: string;
-  action?: 'finaliser' | 'irreparable';
+  action?: 'finaliser' | 'irreparable' | 'update';
 };
 
 type LoaderData = {
@@ -99,141 +105,183 @@ export async function action({ request, params }: ActionFunctionArgs) {
     const formData = await request.formData();
     const action = formData.get('action') as string;
 
-    if (action === 'update') {
-      // Extract form values
-      const panne_trouvee = formData.get('panne_trouvee') as string;
-      const priorite = formData.get('priorite') as
-        | 'Haute'
-        | 'Moyenne'
-        | 'Basse';
-      const status = formData.get('status') as
-        | 'Termine'
-        | 'enCours'
-        | 'Irreparable';
-      const date_sortie = formData.get('date_sortie') as string;
-      const technicien = Number(formData.get('technicien') || 1);
-      const numero_serie = formData.get('numero_serie') as string;
+    if (!action) {
+      return json({ errors: { form: 'Action is required' } }, { status: 400 });
+    }
 
-      // Get selected component IDs from the form
-      const selectedComposantIds = formData.getAll(
-        'composants_utilises',
-      ) as string[];
-
-      // Validate fields
-      const errors: ActionData['errors'] = {};
-      if (!panne_trouvee) errors.panne_trouvee = 'La panne trouvée est requise';
-      if (!status) errors.status = 'Le statut est requis';
-      if (!priorite) errors.priorite = 'La priorité est requise';
-
-      if (Object.keys(errors).length > 0) {
-        return json({ errors, success: false }, { status: 400 });
-      }
-
-      // Process selected components
-      const selectedComposantsArray = selectedComposantIds.map((id) =>
-        parseInt(id),
-      );
-
-      // Prepare update data
-      const updateData = {
-        panne_trouvee,
-        priorite,
-        status,
-        date_sortie: date_sortie || null,
-        technicien,
-        numero_serie,
-        composants_utilises: selectedComposantsArray,
-      };
-
-      // Update intervention
-      await updateInterventionById(session.access, interventionId, updateData);
-
-      return json({
-        success: true,
-        message: 'Intervention mise à jour avec succès',
-      });
-    } else if (action === 'finaliser') {
-      // Set status to "Termine" and add a completion date
-      const currentDate = new Date().toISOString().split('T')[0];
-
-      await updateInterventionById(session.access, interventionId, {
-        status: 'Termine',
-        date_sortie: currentDate,
-      });
-
-      // Return success with action type for the modal
-      return json({
-        success: true,
-        action: 'finaliser',
-        message: 'Intervention finalisée avec succès',
-      });
-    } else if (action === 'irreparable') {
-      // First, get the intervention details and associated demande
+    try {
+      // Get the intervention details first for email notification
       const intervention = await fetchInterventionById(
         session.access,
         interventionId,
       );
 
       if (!intervention) {
-        return json(
-          {
-            errors: { form: 'Intervention introuvable' },
-            success: false,
-          },
-          { status: 404 },
-        );
+        throw new Error('Intervention not found');
       }
 
-      let demande = null;
-      if (intervention.demande_id) {
-        demande = await fetchDemandeById(
-          session.access,
-          intervention.demande_id.toString(),
-        );
+      // Get associated demande details for contact information
+      const demande = intervention.demande_id
+        ? await fetchDemandeById(
+            session.access,
+            intervention.demande_id.toString(),
+          )
+        : null;
+
+      // Handle different action types
+      switch (action) {
+        case 'finaliser': {
+          // Update intervention status to "Termine"
+          console.log('Updating intervention to complete');
+          await updateInterventionById(session.access, interventionId, {
+            status: 'Termine',
+            date_sortie: new Date().toISOString(),
+          });
+
+          // Send email notification
+          if (
+            demande &&
+            demande.email &&
+            demande.nom_deposant &&
+            intervention.numero_serie
+          ) {
+            await sendRepairCompletedEmail(
+              session.access,
+              demande.email,
+              demande.nom_deposant,
+              intervention.numero_serie,
+              intervention.panne_trouvee || 'Problème résolu',
+            );
+          }
+
+          return json({
+            success: true,
+            action: 'finaliser',
+            message: 'Intervention finalisée avec succès',
+          });
+        }
+
+        case 'irreparable': {
+          const cause = formData.get('cause') as string;
+
+          console.log('Updating intervention to irreparable');
+
+          if (!cause) {
+            console.log('Cause is required');
+            return json(
+              { errors: { cause: 'La cause est requise' } },
+              { status: 400 },
+            );
+          }
+
+          // Update intervention status to "Irreparable"
+          await updateInterventionById(session.access, interventionId, {
+            status: 'Irreparable',
+            panne_trouvee: cause,
+          });
+
+          // Create a new equipment entry
+          const equipementData: Equipement = {
+            model_reference: intervention.numero_serie || 'Sans référence',
+            numero_serie: intervention.numero_serie || 'Sans numéro',
+            designation: cause,
+            observation: 'Équipement déclaré irréparable',
+            numero_inventaire: intervention.numero_serie || 'Sans numéro',
+            created_at: new Date().toISOString(),
+          };
+
+          await createEquipement(session.access, equipementData);
+
+          // Send email notification
+          if (
+            demande &&
+            demande.email &&
+            demande.nom_deposant &&
+            intervention.numero_serie
+          ) {
+            await sendEquipmentIrreparableEmail(
+              session.access,
+              demande.email,
+              demande.nom_deposant,
+              intervention.numero_serie,
+              cause,
+            );
+          }
+
+          return json({
+            success: true,
+            action: 'irreparable',
+            message: 'Équipement marqué comme irréparable',
+          });
+        }
+
+        case 'update': {
+          // Extract form values
+          const panne_trouvee = formData.get('panne_trouvee') as string;
+          const priorite = formData.get('priorite') as
+            | 'Haute'
+            | 'Moyenne'
+            | 'Basse';
+          const status = intervention.status || 'enCours'; // Keep existing status
+          const technicien = Number(formData.get('technicien') || 1);
+          const numero_serie = formData.get('numero_serie') as string;
+
+          // Get selected component IDs from the form
+          const selectedComposantIds = formData.getAll(
+            'composants_utilises',
+          ) as string[];
+
+          // Validate fields
+          const errors: ActionData['errors'] = {};
+          if (!panne_trouvee)
+            errors.panne_trouvee = 'La panne trouvée est requise';
+          if (!priorite) errors.priorite = 'La priorité est requise';
+
+          if (Object.keys(errors).length > 0) {
+            return json({ errors, success: false }, { status: 400 });
+          }
+
+          // Process selected components
+          const selectedComposantsArray = selectedComposantIds.map((id) =>
+            parseInt(id),
+          );
+
+          // Prepare update data
+          const updateData = {
+            panne_trouvee,
+            priorite,
+            status,
+            technicien,
+            numero_serie,
+            composants_utilises: selectedComposantsArray,
+          };
+
+          // Update intervention
+          await updateInterventionById(
+            session.access,
+            interventionId,
+            updateData,
+          );
+
+          return json({
+            success: true,
+            action: 'update',
+            message: 'Intervention mise à jour avec succès',
+          });
+        }
+
+        default:
+          return json({ errors: { form: 'Invalid action' } }, { status: 400 });
       }
-
-      // Create equipment from intervention and demande data
-      try {
-        // Create new equipment payload
-        const equipementPayload: Equipement = {
-          model_reference: intervention.numero_serie || '',
-          numero_serie: intervention.numero_serie || '',
-          designation: demande
-            ? `${demande.type_materiel} ${demande.marque}`
-            : 'Équipement irréparable',
-          observation: `Équipement marqué comme irréparable suite à l'intervention #${interventionId}. Panne: ${intervention.panne_trouvee || 'Non spécifiée'}`,
-          numero_inventaire: demande ? demande.numero_inventaire || '' : '',
-          created_at: new Date().toISOString(),
-        };
-
-        // Call API to create equipment (this function needs to be created)
-        await createEquipement(session.access, equipementPayload);
-
-        // Update intervention status to Irreparable
-        await updateInterventionById(session.access, interventionId, {
-          status: 'Irreparable',
-        });
-
-        return json({
-          success: true,
-          action: 'irreparable',
-          message: 'Intervention marquée comme irréparable et équipement créé',
-        });
-      } catch (error) {
-        console.error('Error creating equipment:', error);
-        return json(
-          {
-            errors: {
-              form: "Erreur lors de la création de l'équipement irréparable",
-            },
-            success: false,
-          },
-          { status: 500 },
-        );
-      }
+    } catch (error) {
+      console.error('Error updating intervention:', error);
+      return json(
+        {
+          errors: { form: 'Failed to process the request. Please try again.' },
+        },
+        { status: 500 },
+      );
     }
-
-    return json({ errors: { form: 'Action non reconnue' } }, { status: 400 });
   } catch (error) {
     console.error('Action error:', error);
     return json(
@@ -251,28 +299,6 @@ export async function action({ request, params }: ActionFunctionArgs) {
   }
 }
 
-// Create this new function to handle equipment creation
-async function createEquipement(token: string, data: Equipement) {
-  const response = await fetch(
-    'https://itms-mpsi.onrender.com/api/equipements/',
-    {
-      method: 'POST',
-      headers: {
-        Authorization: `Token ${token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(data),
-    },
-  );
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Failed to create equipment: ${errorText}`);
-  }
-
-  return await response.json();
-}
-
 export default function InterventionDetailsPage() {
   const {
     intervention,
@@ -287,6 +313,8 @@ export default function InterventionDetailsPage() {
     intervention.panne_trouvee || '',
   );
   const [priorite, setPriorite] = useState(intervention.priorite || 'Moyenne');
+
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [status, setStatus] = useState(intervention.status || 'enCours');
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [dateSortie, setDateSortie] = useState(intervention.date_sortie || '');
@@ -303,9 +331,11 @@ export default function InterventionDetailsPage() {
   const [showConfirmModal, setShowConfirmModal] = useState<
     'finaliser' | 'irreparable' | null
   >(null);
-  const [actionSuccessModal, setActionSuccessModal] = useState<
-    'finaliser' | 'irreparable' | null
-  >(null);
+  const [irreparableCause, setIrreparableCause] = useState('');
+  const [showIrreparableModal, setShowIrreparableModal] = useState(false);
+  const [showActionSuccessModal, setShowActionSuccessModal] = useState(false);
+  const [actionSuccessMessage, setActionSuccessMessage] = useState('');
+  const [actionSuccessDetails, setActionSuccessDetails] = useState('');
 
   // Track if the form has been modified
   useEffect(() => {
@@ -318,24 +348,14 @@ export default function InterventionDetailsPage() {
     setModified(
       panneTrouvee !== (intervention.panne_trouvee || '') ||
         priorite !== (intervention.priorite || 'Moyenne') ||
-        status !== (intervention.status || 'enCours') ||
-        dateSortie !== (intervention.date_sortie || '') ||
         numeroSerie !== (intervention.numero_serie || '') ||
         componentsChanged,
     );
-  }, [
-    panneTrouvee,
-    priorite,
-    status,
-    dateSortie,
-    numeroSerie,
-    selectedComponents,
-    intervention,
-  ]);
+  }, [panneTrouvee, priorite, numeroSerie, selectedComponents, intervention]);
 
   // Show toast notification on successful update
   useEffect(() => {
-    if (fetcher.data?.success) {
+    if (fetcher.data?.success && fetcher.data.action === 'update') {
       setShowToast(true);
       const timer = setTimeout(() => {
         setShowToast(false);
@@ -345,6 +365,23 @@ export default function InterventionDetailsPage() {
       setError(fetcher.data.errors.form);
     }
   }, [fetcher.data]);
+
+  // Watch for successful actions to show the appropriate modals
+  useEffect(() => {
+    if (fetcher.data?.success && fetcher.state === 'idle') {
+      if (fetcher.data.action === 'finaliser') {
+        setActionSuccessMessage('Intervention marquée comme terminée');
+        setActionSuccessDetails(
+          "Un email a été envoyé au client pour l'informer.",
+        );
+        setShowActionSuccessModal(true);
+      } else if (fetcher.data.action === 'irreparable') {
+        setActionSuccessMessage('Équipement marqué comme irréparable');
+        setActionSuccessDetails(`Cause : ${irreparableCause}`);
+        setShowActionSuccessModal(true);
+      }
+    }
+  }, [fetcher.data, fetcher.state, irreparableCause]);
 
   // Format date for input fields
   const formatDateForInput = (dateString: string | null) => {
@@ -360,6 +397,7 @@ export default function InterventionDetailsPage() {
     setShowConfirmModal(null);
     const formData = new FormData();
     formData.append('action', action);
+
     fetcher.submit(formData, { method: 'post' });
   };
 
@@ -371,24 +409,9 @@ export default function InterventionDetailsPage() {
     setSelectedComponents(selectedOptions);
   };
 
-  // Watch for action success to show success modal
-  useEffect(() => {
-    if (
-      fetcher.data?.success &&
-      fetcher.data.action &&
-      fetcher.state === 'idle'
-    ) {
-      if (fetcher.data.action === 'finaliser') {
-        setActionSuccessModal('finaliser');
-      } else if (fetcher.data.action === 'irreparable') {
-        setActionSuccessModal('irreparable');
-      }
-    }
-  }, [fetcher.data, fetcher.state]);
-
   // Handle navigation after success
   const handleSuccessClose = () => {
-    setActionSuccessModal(null);
+    setShowActionSuccessModal(false);
     navigate('/interventions');
   };
 
@@ -555,11 +578,6 @@ export default function InterventionDetailsPage() {
                 id='status'
                 name='status'
                 value={status}
-                onChange={(e) =>
-                  setStatus(
-                    e.target.value as 'Termine' | 'enCours' | 'Irreparable',
-                  )
-                }
                 disabled={true}
                 className='w-full rounded-md border border-gray-300 bg-gray-100 px-3 py-2 text-sm transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500'
               >
@@ -770,7 +788,7 @@ export default function InterventionDetailsPage() {
           {intervention.status === 'enCours' && (
             <div className='mt-8 flex justify-center space-x-4'>
               <Button
-                onClick={() => setShowConfirmModal('irreparable')}
+                onClick={() => setShowIrreparableModal(true)}
                 className='bg-red-600 px-8 py-2 text-white hover:bg-red-700 disabled:opacity-70'
                 disabled={isSubmitting}
               >
@@ -805,7 +823,7 @@ export default function InterventionDetailsPage() {
                 <Button
                   variant='outline'
                   onClick={() => setShowConfirmModal(null)}
-                  className='border-gray-300'
+                  className='border border-mpsi text-mpsi'
                   disabled={isSubmitting}
                 >
                   Annuler
@@ -833,25 +851,111 @@ export default function InterventionDetailsPage() {
           </div>
         )}
 
-        {/* Success Modal for Finaliser action */}
-        {actionSuccessModal === 'finaliser' && (
+        {/* Irreparable Modal */}
+        {showIrreparableModal && (
+          <div className='fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm'>
+            <div className='w-full max-w-md rounded-lg bg-white p-6 shadow-xl'>
+              <h3 className='mb-4 text-xl font-semibold text-gray-900'>
+                Marquer comme irréparable
+              </h3>
+
+              <fetcher.Form
+                method='post'
+                onSubmit={(e) => {
+                  if (!irreparableCause.trim()) {
+                    e.preventDefault();
+                    return;
+                  }
+                  setShowIrreparableModal(false);
+                }}
+              >
+                <input type='hidden' name='action' value='irreparable' />
+
+                <div className='mb-4'>
+                  <label
+                    htmlFor='cause'
+                    className='mb-2 block text-sm font-medium text-gray-700'
+                  >
+                    Cause d&apos;irréparabilité*
+                  </label>
+                  <textarea
+                    id='cause'
+                    name='cause'
+                    rows={3}
+                    value={irreparableCause}
+                    onChange={(e) => setIrreparableCause(e.target.value)}
+                    placeholder="Expliquez pourquoi l'équipement ne peut pas être réparé"
+                    className='w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500'
+                    required
+                  />
+                  {fetcher.data?.errors?.cause && (
+                    <p className='mt-1 text-sm text-red-500'>
+                      {fetcher.data.errors.cause}
+                    </p>
+                  )}
+                </div>
+
+                <div className='flex justify-end gap-3'>
+                  <Button
+                    type='button'
+                    className='border border-mpsi text-mpsi'
+                    onClick={() => setShowIrreparableModal(false)}
+                    disabled={isSubmitting}
+                  >
+                    Annuler
+                  </Button>
+
+                  <Button
+                    type='submit'
+                    className='bg-red-500 text-white hover:bg-red-600'
+                    disabled={isSubmitting || !irreparableCause.trim()}
+                  >
+                    {isSubmitting ? (
+                      <div className='flex items-center gap-2'>
+                        <div className='size-4 animate-spin rounded-full border-2 border-white border-t-transparent'></div>
+                        <span>Traitement...</span>
+                      </div>
+                    ) : (
+                      'Confirmer'
+                    )}
+                  </Button>
+                </div>
+              </fetcher.Form>
+            </div>
+          </div>
+        )}
+
+        {/* Action Success Modal */}
+        {showActionSuccessModal && (
           <div className='fixed inset-0 z-50 flex items-center justify-center bg-white/40 backdrop-blur-sm'>
             <div className='w-[90%] max-w-lg rounded-lg border border-blue-400 bg-white p-8 text-center shadow-lg'>
-              <img
-                src='/check.png'
-                alt='Success'
-                className='mx-auto mb-4 w-14'
-              />
+              <div className='mx-auto mb-4 flex size-16 items-center justify-center rounded-full bg-green-100'>
+                <svg
+                  className='size-8 text-green-600'
+                  fill='none'
+                  viewBox='0 0 24 24'
+                  stroke='currentColor'
+                >
+                  <path
+                    strokeLinecap='round'
+                    strokeLinejoin='round'
+                    strokeWidth='2'
+                    d='M5 13l4 4L19 7'
+                  />
+                </svg>
+              </div>
+
               <h3 className='mb-2 text-lg font-semibold text-black'>
-                Intervention finalisée avec succès
+                {actionSuccessMessage}
               </h3>
+
               <p className='mb-6 text-sm text-gray-600'>
-                L&apos;intervention a été marquée comme terminée et la date de
-                sortie a été définie à aujourd&apos;hui.
+                {actionSuccessDetails}
               </p>
+
               <Button
                 onClick={handleSuccessClose}
-                className='mx-auto rounded-md bg-[#1D6BF3] font-medium text-white hover:bg-blue-700'
+                className='mx-auto rounded-md bg-mpsi font-medium text-white hover:bg-mpsi/90'
               >
                 OK
               </Button>
@@ -859,32 +963,29 @@ export default function InterventionDetailsPage() {
           </div>
         )}
 
-        {/* Success Modal for Irreparable action */}
-        {actionSuccessModal === 'irreparable' && (
-          <div className='fixed inset-0 z-50 flex items-center justify-center bg-white/40 backdrop-blur-sm'>
-            <div className='w-[90%] max-w-lg rounded-lg border border-blue-400 bg-white p-8 text-center shadow-lg'>
-              <img
-                src='/check.png'
-                alt='Success'
-                className='mx-auto mb-4 w-14'
+        {/* Back button */}
+        <div className='mt-8'>
+          <Link
+            to='/interventions'
+            className='inline-flex items-center rounded-md bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-200'
+          >
+            <svg
+              xmlns='http://www.w3.org/2000/svg'
+              className='mr-2 size-5'
+              fill='none'
+              viewBox='0 0 24 24'
+              stroke='currentColor'
+              strokeWidth={2}
+            >
+              <path
+                strokeLinecap='round'
+                strokeLinejoin='round'
+                d='M15 12H9m0 0H3m6 0v8m0-8l6-6m-6 6l6 6'
               />
-              <h3 className='mb-2 text-lg font-semibold text-black'>
-                Intervention marquée comme irréparable
-              </h3>
-              <p className='mb-6 text-sm text-gray-600'>
-                L&apos;intervention a été marquée comme irréparable et un nouvel
-                équipement a été créé avec le statut{' '}
-                <b className='text-red-700'>Irréparable</b>.
-              </p>
-              <Button
-                onClick={handleSuccessClose}
-                className='mx-auto rounded-md bg-[#1D6BF3] font-medium text-white hover:bg-blue-700'
-              >
-                OK
-              </Button>
-            </div>
-          </div>
-        )}
+            </svg>
+            Retour à la liste des interventions
+          </Link>
+        </div>
       </div>
     </Layout>
   );

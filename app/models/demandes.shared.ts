@@ -30,6 +30,7 @@ export interface Demande {
   email: string;
   status: string;
   panne_declaree: string;
+  materiels_installes: Composant[];
   status_demande: 'Nouvelle' | 'Acceptee' | 'Rejetee';
 }
 
