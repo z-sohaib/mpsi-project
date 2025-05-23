@@ -404,90 +404,100 @@ export default function AjouterComposantPage() {
 
           {/* Right side - More fields + Upload */}
           <div className='space-y-4'>
-            {/* Numéro de série équipement source */}
-            <div className='w-full'>
-              <label
-                htmlFor='numero_serie_eq_source'
-                className='mb-1 block text-sm font-medium text-gray-700'
-              >
-                N° série équipement source
-              </label>
-              <Input
-                id='numero_serie_eq_source'
-                name='numero_serie_eq_source'
-                value={formData.numero_serie_eq_source}
-                onChange={handleInputChange}
-                placeholder='Ex: SRC-123456'
-                className='w-full'
-              />
-            </div>
+            {/* Fields for "Ancien" type components */}
+            {formData.type_composant === 'Ancien' && (
+              <>
+                {/* Numéro de série équipement source */}
+                <div className='w-full'>
+                  <label
+                    htmlFor='numero_serie_eq_source'
+                    className='mb-1 block text-sm font-medium text-gray-700'
+                  >
+                    N° série équipement source
+                  </label>
+                  <Input
+                    id='numero_serie_eq_source'
+                    name='numero_serie_eq_source'
+                    value={formData.numero_serie_eq_source}
+                    onChange={handleInputChange}
+                    placeholder='Ex: SRC-123456'
+                    className='w-full'
+                  />
+                </div>
 
-            {/* Numéro d'inventaire équipement source */}
-            <div className='w-full'>
-              <label
-                htmlFor='numero_inventaire_eq_source'
-                className='mb-1 block text-sm font-medium text-gray-700'
-              >
-                N° inventaire équipement source
-              </label>
-              <Input
-                id='numero_inventaire_eq_source'
-                name='numero_inventaire_eq_source'
-                value={formData.numero_inventaire_eq_source}
-                onChange={handleInputChange}
-                placeholder='Ex: INV-2023-001'
-                className='w-full'
-              />
-            </div>
+                {/* Numéro d'inventaire équipement source */}
+                <div className='w-full'>
+                  <label
+                    htmlFor='numero_inventaire_eq_source'
+                    className='mb-1 block text-sm font-medium text-gray-700'
+                  >
+                    N° inventaire équipement source
+                  </label>
+                  <Input
+                    id='numero_inventaire_eq_source'
+                    name='numero_inventaire_eq_source'
+                    value={formData.numero_inventaire_eq_source}
+                    onChange={handleInputChange}
+                    placeholder='Ex: INV-2023-001'
+                    className='w-full'
+                  />
+                </div>
+              </>
+            )}
 
-            {/* Quantité */}
-            <div className='w-full'>
-              <label
-                htmlFor='quantity'
-                className='mb-1 block text-sm font-medium text-gray-700'
-              >
-                Quantité*
-              </label>
-              <Input
-                id='quantity'
-                name='quantity'
-                type='number'
-                min='1'
-                value={formData.quantity}
-                onChange={handleInputChange}
-                className='w-full'
-              />
-              {actionData?.errors?.quantity && (
-                <p className='mt-1 text-sm text-red-500'>
-                  {actionData.errors.quantity}
-                </p>
-              )}
-            </div>
+            {/* Fields for "Nouveau" type components */}
+            {formData.type_composant === 'Nouveau' && (
+              <>
+                {/* Quantité */}
+                <div className='w-full'>
+                  <label
+                    htmlFor='quantity'
+                    className='mb-1 block text-sm font-medium text-gray-700'
+                  >
+                    Quantité*
+                  </label>
+                  <Input
+                    id='quantity'
+                    name='quantity'
+                    type='number'
+                    min='1'
+                    value={formData.quantity}
+                    onChange={handleInputChange}
+                    className='w-full'
+                  />
+                  {actionData?.errors?.quantity && (
+                    <p className='mt-1 text-sm text-red-500'>
+                      {actionData.errors.quantity}
+                    </p>
+                  )}
+                </div>
 
-            {/* Disponibilité */}
-            <div className='flex w-full items-center'>
-              <div className='flex items-center space-x-2'>
-                <input
-                  id='disponible'
-                  name='disponible'
-                  type='checkbox'
-                  className='size-4 rounded border-gray-300 text-mpsi focus:ring-mpsi'
-                  checked={formData.disponible}
-                  onChange={(e) =>
-                    setFormData((prev) => ({
-                      ...prev,
-                      disponible: e.target.checked,
-                    }))
-                  }
-                />
-                <label
-                  htmlFor='disponible'
-                  className='text-sm font-medium text-gray-700'
-                >
-                  Composant disponible
-                </label>
-              </div>
-            </div>
+                {/* Disponibilité */}
+                <div className='flex w-full items-center'>
+                  <div className='flex items-center space-x-2'>
+                    <input
+                      id='disponible'
+                      name='disponible'
+                      type='checkbox'
+                      className='size-4 rounded border-gray-300 text-mpsi focus:ring-mpsi'
+                      checked={formData.disponible}
+                      onChange={(e) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          disponible: e.target.checked,
+                        }))
+                      }
+                    />
+                    <label
+                      htmlFor='disponible'
+                      className='text-sm font-medium text-gray-700'
+                    >
+                      Composant disponible
+                    </label>
+                  </div>
+                </div>
+              </>
+            )}
 
             {/* Image upload section */}
             <div className='mt-2 space-y-2'>
