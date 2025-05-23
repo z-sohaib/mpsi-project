@@ -226,10 +226,13 @@ export async function action({ request, params }: ActionFunctionArgs) {
           const technicien = Number(formData.get('technicien') || 1);
           const numero_serie = formData.get('numero_serie') as string;
 
-          // Get selected component IDs from the form
+          // Properly get selected component IDs from the form
+          // The issue was likely here - make sure we're getting all selected components
           const selectedComposantIds = formData.getAll(
             'composants_utilises',
           ) as string[];
+
+          console.log('Selected components from form:', selectedComposantIds);
 
           // Validate fields
           const errors: ActionData['errors'] = {};
@@ -241,9 +244,9 @@ export async function action({ request, params }: ActionFunctionArgs) {
             return json({ errors, success: false }, { status: 400 });
           }
 
-          // Process selected components
+          // Process selected components - convert string IDs to numbers
           const selectedComposantsArray = selectedComposantIds.map((id) =>
-            parseInt(id),
+            parseInt(id, 10),
           );
 
           // Prepare update data
@@ -255,6 +258,8 @@ export async function action({ request, params }: ActionFunctionArgs) {
             numero_serie,
             composants_utilises: selectedComposantsArray,
           };
+
+          console.log('Updating intervention with data:', updateData);
 
           // Update intervention
           await updateInterventionById(
@@ -415,6 +420,37 @@ export default function InterventionDetailsPage() {
     navigate('/interventions');
   };
 
+  // Check if the intervention is editable
+  const isEditable = intervention.status === 'enCours';
+
+  // Track if the form has been modified - only allow this when status is "enCours"
+  useEffect(() => {
+    if (!isEditable) {
+      setModified(false);
+      return;
+    }
+
+    const originalComponentIds =
+      intervention.composants_utilises?.map((comp) => comp.id) || [];
+    const componentsChanged =
+      selectedComponents.length !== originalComponentIds.length ||
+      !selectedComponents.every((id) => originalComponentIds.includes(id));
+
+    setModified(
+      panneTrouvee !== (intervention.panne_trouvee || '') ||
+        priorite !== (intervention.priorite || 'Moyenne') ||
+        numeroSerie !== (intervention.numero_serie || '') ||
+        componentsChanged,
+    );
+  }, [
+    panneTrouvee,
+    priorite,
+    numeroSerie,
+    selectedComponents,
+    intervention,
+    isEditable,
+  ]);
+
   return (
     <Layout>
       <div className='mx-auto my-8 max-w-4xl px-4 md:px-0'>
@@ -429,6 +465,33 @@ export default function InterventionDetailsPage() {
           <h2 className='mb-6 text-center text-xl font-bold text-[#1D6BF3]'>
             Détails de l&apos;intervention #{intervention.id}
           </h2>
+
+          {/* Show a notice when intervention is not editable */}
+          {!isEditable && (
+            <div className='mb-6 rounded-md bg-yellow-50 p-4 text-amber-800'>
+              <div className='flex'>
+                <svg
+                  className='mr-2 size-5 text-amber-600'
+                  xmlns='http://www.w3.org/2000/svg'
+                  viewBox='0 0 20 20'
+                  fill='currentColor'
+                >
+                  <path
+                    fillRule='evenodd'
+                    d='M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z'
+                    clipRule='evenodd'
+                  />
+                </svg>
+                <p>
+                  Cette intervention est{' '}
+                  {intervention.status === 'Termine'
+                    ? 'terminée'
+                    : 'irréparable'}{' '}
+                  et ne peut plus être modifiée.
+                </p>
+              </div>
+            </div>
+          )}
 
           {error && (
             <div className='mb-4 rounded-md bg-red-100 p-4 text-red-700'>
@@ -499,9 +562,10 @@ export default function InterventionDetailsPage() {
                 id='numero_serie'
                 name='numero_serie'
                 value={numeroSerie}
-                onChange={(e) => setNumeroSerie(e.target.value)}
-                className='w-full border-gray-300'
+                onChange={(e) => isEditable && setNumeroSerie(e.target.value)}
+                className={`w-full border-gray-300 ${!isEditable ? 'bg-gray-100' : ''}`}
                 placeholder='Entrez le numéro de série'
+                readOnly={!isEditable}
               />
               {fetcher.data?.errors?.numero_serie && (
                 <p className='mt-1 text-sm text-red-500'>
@@ -522,12 +586,13 @@ export default function InterventionDetailsPage() {
                 name='panne_trouvee'
                 rows={3}
                 value={panneTrouvee}
-                onChange={(e) => setPanneTrouvee(e.target.value)}
+                onChange={(e) => isEditable && setPanneTrouvee(e.target.value)}
                 className={`w-full rounded-md border px-3 py-2 text-sm transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
                   fetcher.data?.errors?.panne_trouvee
                     ? 'border-red-500 focus:ring-red-500'
                     : 'border-gray-300'
-                }`}
+                } ${!isEditable ? 'bg-gray-100' : ''}`}
+                readOnly={!isEditable}
               />
               {fetcher.data?.errors?.panne_trouvee && (
                 <p className='mt-1 text-sm text-red-500'>
@@ -548,13 +613,15 @@ export default function InterventionDetailsPage() {
                 name='priorite'
                 value={priorite}
                 onChange={(e) =>
+                  isEditable &&
                   setPriorite(e.target.value as 'Haute' | 'Moyenne' | 'Basse')
                 }
                 className={`w-full rounded-md border px-3 py-2 text-sm transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
                   fetcher.data?.errors?.priorite
                     ? 'border-red-500 focus:ring-red-500'
                     : 'border-gray-300'
-                }`}
+                } ${!isEditable ? 'bg-gray-100' : ''}`}
+                disabled={!isEditable}
               >
                 <option value='Haute'>Haute</option>
                 <option value='Moyenne'>Moyenne</option>
@@ -586,9 +653,17 @@ export default function InterventionDetailsPage() {
                 <option value='Irreparable'>Irréparable</option>
               </select>
               <p className='mt-1 text-xs text-gray-500'>
-                Le statut est modifié par les actions{' '}
-                <span className='text-green-700'>Finaliser</span> ou{' '}
-                <span className='text-red-700'>Irréparable</span>
+                {isEditable ? (
+                  <>
+                    Le statut est modifié par les actions{' '}
+                    <span className='text-green-700'>Finaliser</span> ou{' '}
+                    <span className='text-red-700'>Irréparable</span>
+                  </>
+                ) : (
+                  `Cette intervention a été marquée comme ${
+                    status === 'Termine' ? 'terminée' : 'irréparable'
+                  } et ne peut plus être modifiée.`
+                )}
               </p>
             </div>
 
@@ -608,8 +683,9 @@ export default function InterventionDetailsPage() {
                 className='w-full border-gray-300 bg-gray-100'
               />
               <p className='mt-1 text-xs text-gray-500'>
-                La date de sortie est définie automatiquement lors de la
-                finalisation
+                {status === 'Termine'
+                  ? 'La date de sortie a été définie lors de la finalisation'
+                  : 'La date de sortie est définie automatiquement lors de la finalisation'}
               </p>
             </div>
 
@@ -626,24 +702,30 @@ export default function InterventionDetailsPage() {
                   Sélectionnez les composants utilisés
                 </label>
                 <div className='relative'>
+                  {/* Make sure to set the name correctly for multiple selections */}
                   <select
                     id='composants_utilises'
                     name='composants_utilises'
                     multiple
                     value={selectedComponents.map((id) => id.toString())}
-                    onChange={handleComponentChange}
-                    className='w-full appearance-none rounded-md border border-blue-200 bg-white px-4 py-3 text-sm shadow-inner focus:border-blue-400 focus:outline-none focus:ring focus:ring-blue-200/50'
+                    onChange={(e) => isEditable && handleComponentChange(e)}
+                    className={`w-full appearance-none rounded-md border border-blue-200 px-4 py-3 text-sm shadow-inner focus:border-blue-400 focus:outline-none focus:ring focus:ring-blue-200/50 ${
+                      !isEditable ? 'bg-gray-100 opacity-80' : 'bg-white'
+                    }`}
                     size={6}
                     style={{
                       scrollbarWidth: 'thin',
                       scrollbarColor: '#3B82F6 #EFF6FF',
                     }}
+                    disabled={!isEditable}
                   >
                     {composants.map((composant) => (
                       <option
                         key={composant.id}
                         value={composant.id}
-                        className='mb-1 cursor-pointer border-b border-blue-50 px-1 py-2 last:border-0 hover:bg-blue-50'
+                        className={`mb-1 cursor-pointer border-b border-blue-50 px-1 py-2 last:border-0 ${
+                          isEditable ? 'hover:bg-blue-50' : ''
+                        }`}
                       >
                         <span className='font-medium'>
                           {composant.designation}
@@ -676,35 +758,37 @@ export default function InterventionDetailsPage() {
                     </svg>
                   </div>
                 </div>
-                <div className='mt-2 flex items-center gap-2 text-xs text-gray-500'>
-                  <span className='flex size-5 items-center justify-center rounded-full bg-blue-100 text-xs text-blue-600'>
-                    <svg
-                      xmlns='http://www.w3.org/2000/svg'
-                      className='size-3'
-                      fill='none'
-                      viewBox='0 0 24 24'
-                      stroke='currentColor'
-                      strokeWidth={2}
-                    >
-                      <path
-                        strokeLinecap='round'
-                        strokeLinejoin='round'
-                        d='M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z'
-                      />
-                    </svg>
-                  </span>
-                  <span>
-                    Maintenez{' '}
-                    <kbd className='rounded border border-gray-300 bg-gray-100 px-1 font-sans font-semibold'>
-                      Ctrl
-                    </kbd>{' '}
-                    (ou{' '}
-                    <kbd className='rounded border border-gray-300 bg-gray-100 px-1 font-sans font-semibold'>
-                      Cmd
-                    </kbd>{' '}
-                    sur Mac) pour sélectionner plusieurs composants
-                  </span>
-                </div>
+                {isEditable && (
+                  <div className='mt-2 flex items-center gap-2 text-xs text-gray-500'>
+                    <span className='flex size-5 items-center justify-center rounded-full bg-blue-100 text-xs text-blue-600'>
+                      <svg
+                        xmlns='http://www.w3.org/2000/svg'
+                        className='size-3'
+                        fill='none'
+                        viewBox='0 0 24 24'
+                        stroke='currentColor'
+                        strokeWidth={2}
+                      >
+                        <path
+                          strokeLinecap='round'
+                          strokeLinejoin='round'
+                          d='M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z'
+                        />
+                      </svg>
+                    </span>
+                    <span>
+                      Maintenez{' '}
+                      <kbd className='rounded border border-gray-300 bg-gray-100 px-1 font-sans font-semibold'>
+                        Ctrl
+                      </kbd>{' '}
+                      (ou{' '}
+                      <kbd className='rounded border border-gray-300 bg-gray-100 px-1 font-sans font-semibold'>
+                        Cmd
+                      </kbd>{' '}
+                      sur Mac) pour sélectionner plusieurs composants
+                    </span>
+                  </div>
+                )}
               </div>
 
               {/* Show selected components in a more stylish way */}
@@ -763,9 +847,9 @@ export default function InterventionDetailsPage() {
               </div>
             </div>
 
-            {/* Submit button - only visible if modified */}
+            {/* Submit button - only visible if modified and status is enCours */}
             <div className='col-span-full mt-6 flex justify-center'>
-              {modified && (
+              {modified && isEditable && (
                 <Button
                   type='submit'
                   className='bg-mpsi px-8 py-2 text-white hover:bg-mpsi/90 disabled:opacity-70'
@@ -784,7 +868,7 @@ export default function InterventionDetailsPage() {
             </div>
           </fetcher.Form>
 
-          {/* Action buttons for finalizing or marking as irreparable */}
+          {/* Action buttons for finalizing or marking as irreparable - only visible if status is enCours */}
           {intervention.status === 'enCours' && (
             <div className='mt-8 flex justify-center space-x-4'>
               <Button
