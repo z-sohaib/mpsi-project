@@ -151,5 +151,61 @@ export async function updateDemandeById(
   }
 }
 
+/**
+ * Create a new demande
+ */
+export async function createDemande(
+  token: string,
+  demandeData: {
+    nom_deposant: string;
+    panne_declaree: string;
+    email: string;
+    marque: string;
+    numero_telephone: string;
+    service_affectation: string;
+    status: string;
+    type_materiel: string;
+    numero_inventaire: string;
+    status_demande?: string;
+  },
+): Promise<Demande> {
+  try {
+    const response = await fetch(
+      'https://itms-mpsi.onrender.com/api/demandes/',
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Token ${token}`,
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify({
+          ...demandeData,
+          status_demande: demandeData.status_demande || 'Nouvelle',
+        }),
+      },
+    );
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      try {
+        // Try to parse error as JSON
+        const errorData = JSON.parse(errorText);
+        throw new Error(errorData.detail || `API Error: ${response.status}`);
+      } catch (e) {
+        // If can't parse as JSON, use text directly
+        throw new Error(
+          `API Error: ${response.status} - ${errorText || 'Unknown error'}`,
+        );
+      }
+    }
+
+    return (await response.json()) as Demande;
+  } catch (error) {
+    console.error('Failed to create demande:', error);
+    throw error;
+  }
+}
+
 // Re-export from shared module for convenience
 export { filterDemandesByStatus } from './demandes.shared';

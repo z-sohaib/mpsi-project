@@ -108,3 +108,51 @@ export async function fetchEquipementById(
     throw error;
   }
 }
+
+/**
+ * Create a new equipement
+ */
+export async function createEquipement(
+  token: string,
+  equipementData: {
+    model_reference: string;
+    numero_serie: string;
+    designation: string;
+    observation: string;
+    numero_inventaire: string;
+  },
+): Promise<Equipement> {
+  try {
+    const response = await fetch(
+      'https://itms-mpsi.onrender.com/api/equipements/',
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Token ${token}`,
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify(equipementData),
+      },
+    );
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      try {
+        // Try to parse error as JSON
+        const errorData = JSON.parse(errorText);
+        throw new Error(errorData.detail || `API Error: ${response.status}`);
+      } catch (e) {
+        // If can't parse as JSON, use text directly
+        throw new Error(
+          `API Error: ${response.status} - ${errorText || 'Unknown error'}`,
+        );
+      }
+    }
+
+    return (await response.json()) as Equipement;
+  } catch (error) {
+    console.error('Failed to create equipement:', error);
+    throw error;
+  }
+}
