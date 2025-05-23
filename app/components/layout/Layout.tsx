@@ -17,7 +17,7 @@ export default function Layout({ children }: LayoutProps) {
       <div className='flex flex-1 flex-col'>
         {/* Pass userInfo to Topbar */}
         <Topbar />
-        <main className='flex-1 overflow-y-auto'>{children}</main>
+        <main className='mt-8 flex-1 overflow-y-auto'>{children}</main>
       </div>
     </div>
   );
