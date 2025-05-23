@@ -200,8 +200,16 @@ export default function InterventionsIndexPage() {
       accessor: 'created_at' as const,
       cell: (value: unknown) => formatDate(value as string),
     },
-    { header: 'N° SÉRIE', accessor: 'numero_serie' as const },
-    { header: 'PANNE TROUVÉE', accessor: 'panne_trouvee' as const },
+    {
+      header: 'N° SÉRIE',
+      accessor: 'numero_serie' as const,
+      cell: (value: unknown) => (value ? String(value) : 'Non définie'),
+    },
+    {
+      header: 'PANNE TROUVÉE',
+      accessor: 'panne_trouvee' as const,
+      cell: (value: unknown) => (value ? String(value) : 'Non définie'),
+    },
     {
       header: 'DATE SORTIE',
       accessor: 'date_sortie' as const,
@@ -265,7 +273,7 @@ export default function InterventionsIndexPage() {
           onFiltersChange={handleFiltersChange}
           addButtonLink='/interventions/new'
           addButtonText='Créer une intervention'
-          showAddButton={true}
+          showAddButton={false}
         />
 
         {loading ? (

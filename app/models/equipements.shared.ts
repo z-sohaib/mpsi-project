@@ -4,7 +4,7 @@
  */
 
 export interface Equipement {
-  id: number;
+  id?: number;
   model_reference: string;
   created_at: string;
   numero_serie: string;

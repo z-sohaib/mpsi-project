@@ -1,11 +1,13 @@
 export interface Composant {
   id: number;
-  nom: string;
-  quantite: number;
+  model_reference: string;
+  model_serie: string;
+  designation: string;
+  quantity: number;
   ref: string;
   categorie: string;
-  description?: string;
-  type: 'Nouveau' | 'Ancien';
+  observation: string;
+  type_composant: 'Nouveau' | 'Ancien';
   image?: string;
   date_achat?: string;
 }

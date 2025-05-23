@@ -5,7 +5,7 @@ import {
   json,
   redirect,
 } from '@remix-run/node';
-import { useLoaderData, useFetcher, Link } from '@remix-run/react';
+import { useLoaderData, useFetcher, Link, useNavigate } from '@remix-run/react';
 import { Button } from '~/components/ui/Button';
 import { Input } from '~/components/ui/Input';
 
@@ -18,18 +18,7 @@ import {
 import { fetchDemandeById } from '~/models/demandes.server';
 import { Intervention } from '~/models/interventions.shared';
 import { fetchComposants, Composant } from '~/models/composant.server';
-
-// const statusColors = {
-//   Termine: 'bg-green-100/50 text-green-700',
-//   enCours: 'bg-blue-100/50 text-blue-700',
-//   Irreparable: 'bg-red-100/50 text-red-700',
-// };
-
-// const priorityColors = {
-//   Haute: 'bg-red-100/50 text-red-700',
-//   Moyenne: 'bg-yellow-100/50 text-yellow-700',
-//   Basse: 'bg-blue-100/50 text-blue-700',
-// };
+import { Equipement } from '~/models/equipements.shared';
 
 // Define types for the loader and action data
 type ActionData = {
@@ -38,10 +27,12 @@ type ActionData = {
     status?: string;
     priorite?: string;
     date_sortie?: string;
+    numero_serie?: string;
     form?: string;
   };
   success?: boolean;
   message?: string;
+  action?: 'finaliser' | 'irreparable';
 };
 
 type LoaderData = {
@@ -121,6 +112,12 @@ export async function action({ request, params }: ActionFunctionArgs) {
         | 'Irreparable';
       const date_sortie = formData.get('date_sortie') as string;
       const technicien = Number(formData.get('technicien') || 1);
+      const numero_serie = formData.get('numero_serie') as string;
+
+      // Get selected component IDs from the form
+      const selectedComposantIds = formData.getAll(
+        'composants_utilises',
+      ) as string[];
 
       // Validate fields
       const errors: ActionData['errors'] = {};
@@ -132,6 +129,11 @@ export async function action({ request, params }: ActionFunctionArgs) {
         return json({ errors, success: false }, { status: 400 });
       }
 
+      // Process selected components
+      const selectedComposantsArray = selectedComposantIds.map((id) =>
+        parseInt(id),
+      );
+
       // Prepare update data
       const updateData = {
         panne_trouvee,
@@ -139,6 +141,8 @@ export async function action({ request, params }: ActionFunctionArgs) {
         status,
         date_sortie: date_sortie || null,
         technicien,
+        numero_serie,
+        composants_utilises: selectedComposantsArray,
       };
 
       // Update intervention
@@ -149,9 +153,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
         message: 'Intervention mise à jour avec succès',
       });
     } else if (action === 'finaliser') {
-      // TODO: Implement logic for finalizing the intervention
-      // This would typically set status to "Termine" and add a completion date
-
+      // Set status to "Termine" and add a completion date
       const currentDate = new Date().toISOString().split('T')[0];
 
       await updateInterventionById(session.access, interventionId, {
@@ -159,22 +161,76 @@ export async function action({ request, params }: ActionFunctionArgs) {
         date_sortie: currentDate,
       });
 
+      // Return success with action type for the modal
       return json({
         success: true,
+        action: 'finaliser',
         message: 'Intervention finalisée avec succès',
       });
     } else if (action === 'irreparable') {
-      // TODO: Implement logic for marking the intervention as irreparable
-      // This would typically set status to "Irreparable" and might require a reason
+      // First, get the intervention details and associated demande
+      const intervention = await fetchInterventionById(
+        session.access,
+        interventionId,
+      );
 
-      await updateInterventionById(session.access, interventionId, {
-        status: 'Irreparable',
-      });
+      if (!intervention) {
+        return json(
+          {
+            errors: { form: 'Intervention introuvable' },
+            success: false,
+          },
+          { status: 404 },
+        );
+      }
 
-      return json({
-        success: true,
-        message: 'Intervention marquée comme irréparable',
-      });
+      let demande = null;
+      if (intervention.demande_id) {
+        demande = await fetchDemandeById(
+          session.access,
+          intervention.demande_id.toString(),
+        );
+      }
+
+      // Create equipment from intervention and demande data
+      try {
+        // Create new equipment payload
+        const equipementPayload: Equipement = {
+          model_reference: intervention.numero_serie || '',
+          numero_serie: intervention.numero_serie || '',
+          designation: demande
+            ? `${demande.type_materiel} ${demande.marque}`
+            : 'Équipement irréparable',
+          observation: `Équipement marqué comme irréparable suite à l'intervention #${interventionId}. Panne: ${intervention.panne_trouvee || 'Non spécifiée'}`,
+          numero_inventaire: demande ? demande.numero_inventaire || '' : '',
+          created_at: new Date().toISOString(),
+        };
+
+        // Call API to create equipment (this function needs to be created)
+        await createEquipement(session.access, equipementPayload);
+
+        // Update intervention status to Irreparable
+        await updateInterventionById(session.access, interventionId, {
+          status: 'Irreparable',
+        });
+
+        return json({
+          success: true,
+          action: 'irreparable',
+          message: 'Intervention marquée comme irréparable et équipement créé',
+        });
+      } catch (error) {
+        console.error('Error creating equipment:', error);
+        return json(
+          {
+            errors: {
+              form: "Erreur lors de la création de l'équipement irréparable",
+            },
+            success: false,
+          },
+          { status: 500 },
+        );
+      }
     }
 
     return json({ errors: { form: 'Action non reconnue' } }, { status: 400 });
@@ -182,15 +238,39 @@ export async function action({ request, params }: ActionFunctionArgs) {
     console.error('Action error:', error);
     return json(
       {
-        errors:
-          error instanceof Error
-            ? error.message
-            : "Une erreur est survenue lors de la mise à jour de l'intervention",
+        errors: {
+          form:
+            error instanceof Error
+              ? error.message
+              : "Une erreur est survenue lors de la mise à jour de l'intervention",
+        },
         success: false,
       },
       { status: 500 },
     );
   }
+}
+
+// Create this new function to handle equipment creation
+async function createEquipement(token: string, data: Equipement) {
+  const response = await fetch(
+    'https://itms-mpsi.onrender.com/api/equipements/',
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Token ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(data),
+    },
+  );
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Failed to create equipment: ${errorText}`);
+  }
+
+  return await response.json();
 }
 
 export default function InterventionDetailsPage() {
@@ -201,30 +281,57 @@ export default function InterventionDetailsPage() {
     error: loaderError,
   } = useLoaderData<LoaderData>();
   const fetcher = useFetcher<ActionData>();
+  const navigate = useNavigate();
 
   const [panneTrouvee, setPanneTrouvee] = useState(
     intervention.panne_trouvee || '',
   );
   const [priorite, setPriorite] = useState(intervention.priorite || 'Moyenne');
   const [status, setStatus] = useState(intervention.status || 'enCours');
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [dateSortie, setDateSortie] = useState(intervention.date_sortie || '');
+  const [numeroSerie, setNumeroSerie] = useState(
+    intervention.numero_serie || '',
+  );
   const [technicien] = useState(intervention.technicien || 1);
+  const [selectedComponents, setSelectedComponents] = useState<number[]>(
+    intervention.composants_utilises?.map((comp) => comp.id) || [],
+  );
   const [modified, setModified] = useState(false);
   const [showToast, setShowToast] = useState(false);
   const [error, setError] = useState<string | null>(loaderError || null);
   const [showConfirmModal, setShowConfirmModal] = useState<
     'finaliser' | 'irreparable' | null
   >(null);
+  const [actionSuccessModal, setActionSuccessModal] = useState<
+    'finaliser' | 'irreparable' | null
+  >(null);
 
   // Track if the form has been modified
   useEffect(() => {
+    const originalComponentIds =
+      intervention.composants_utilises?.map((comp) => comp.id) || [];
+    const componentsChanged =
+      selectedComponents.length !== originalComponentIds.length ||
+      !selectedComponents.every((id) => originalComponentIds.includes(id));
+
     setModified(
       panneTrouvee !== (intervention.panne_trouvee || '') ||
         priorite !== (intervention.priorite || 'Moyenne') ||
         status !== (intervention.status || 'enCours') ||
-        dateSortie !== (intervention.date_sortie || ''),
+        dateSortie !== (intervention.date_sortie || '') ||
+        numeroSerie !== (intervention.numero_serie || '') ||
+        componentsChanged,
     );
-  }, [panneTrouvee, priorite, status, dateSortie, intervention]);
+  }, [
+    panneTrouvee,
+    priorite,
+    status,
+    dateSortie,
+    numeroSerie,
+    selectedComponents,
+    intervention,
+  ]);
 
   // Show toast notification on successful update
   useEffect(() => {
@@ -254,6 +361,35 @@ export default function InterventionDetailsPage() {
     const formData = new FormData();
     formData.append('action', action);
     fetcher.submit(formData, { method: 'post' });
+  };
+
+  // Handle component selection
+  const handleComponentChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const selectedOptions = Array.from(e.target.selectedOptions, (option) =>
+      Number(option.value),
+    );
+    setSelectedComponents(selectedOptions);
+  };
+
+  // Watch for action success to show success modal
+  useEffect(() => {
+    if (
+      fetcher.data?.success &&
+      fetcher.data.action &&
+      fetcher.state === 'idle'
+    ) {
+      if (fetcher.data.action === 'finaliser') {
+        setActionSuccessModal('finaliser');
+      } else if (fetcher.data.action === 'irreparable') {
+        setActionSuccessModal('irreparable');
+      }
+    }
+  }, [fetcher.data, fetcher.state]);
+
+  // Handle navigation after success
+  const handleSuccessClose = () => {
+    setActionSuccessModal(null);
+    navigate('/interventions');
   };
 
   return (
@@ -338,10 +474,17 @@ export default function InterventionDetailsPage() {
               </label>
               <Input
                 id='numero_serie'
-                value={intervention.numero_serie || ''}
-                readOnly
-                className='w-full bg-gray-100'
+                name='numero_serie'
+                value={numeroSerie}
+                onChange={(e) => setNumeroSerie(e.target.value)}
+                className='w-full border-gray-300'
+                placeholder='Entrez le numéro de série'
               />
+              {fetcher.data?.errors?.numero_serie && (
+                <p className='mt-1 text-sm text-red-500'>
+                  {fetcher.data.errors.numero_serie}
+                </p>
+              )}
             </div>
 
             <div className='w-full'>
@@ -417,21 +560,18 @@ export default function InterventionDetailsPage() {
                     e.target.value as 'Termine' | 'enCours' | 'Irreparable',
                   )
                 }
-                className={`w-full rounded-md border px-3 py-2 text-sm transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                  fetcher.data?.errors?.status
-                    ? 'border-red-500 focus:ring-red-500'
-                    : 'border-gray-300'
-                }`}
+                disabled={true}
+                className='w-full rounded-md border border-gray-300 bg-gray-100 px-3 py-2 text-sm transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500'
               >
                 <option value='enCours'>En cours</option>
                 <option value='Termine'>Terminé</option>
                 <option value='Irreparable'>Irréparable</option>
               </select>
-              {fetcher.data?.errors?.status && (
-                <p className='mt-1 text-sm text-red-500'>
-                  {fetcher.data.errors.status}
-                </p>
-              )}
+              <p className='mt-1 text-xs text-gray-500'>
+                Le statut est modifié par les actions{' '}
+                <span className='text-green-700'>Finaliser</span> ou{' '}
+                <span className='text-red-700'>Irréparable</span>
+              </p>
             </div>
 
             <div className='w-full'>
@@ -446,48 +586,161 @@ export default function InterventionDetailsPage() {
                 name='date_sortie'
                 type='date'
                 value={formatDateForInput(dateSortie)}
-                onChange={(e) => setDateSortie(e.target.value)}
-                className='w-full border-gray-300'
+                readOnly
+                className='w-full border-gray-300 bg-gray-100'
               />
+              <p className='mt-1 text-xs text-gray-500'>
+                La date de sortie est définie automatiquement lors de la
+                finalisation
+              </p>
             </div>
 
             {/* Composants section */}
             <div className='col-span-full mt-4'>
-              <h3 className='mb-2 text-lg font-semibold text-gray-900'>
+              <h3 className='mb-4 text-lg font-semibold text-gray-900'>
                 Composants utilisés
               </h3>
-              <div className='mb-4 rounded-md bg-gray-50 p-4'>
-                {intervention.composants_utilises &&
-                intervention.composants_utilises.length > 0 ? (
-                  <ul className='space-y-2'>
-                    {intervention.composants_utilises.map(
-                      (composant: Composant) => {
-                        const composantId: number | undefined = composants.find(
-                          (c) => c.id === composantId,
-                        )?.id;
-                        return (
-                          <li
-                            key={composantId}
-                            className='flex items-center justify-between'
-                          >
-                            <span>
-                              {composant?.nom || `Composant #${composantId}`}
-                            </span>
-                            <Link
-                              to={`/composants/${composantId}`}
-                              className='text-sm text-blue-600 hover:underline'
-                            >
-                              Voir détails
-                            </Link>
-                          </li>
-                        );
-                      },
-                    )}
-                  </ul>
+              <div className='mb-4 rounded-lg bg-gray-50 p-4 shadow-sm'>
+                <label
+                  htmlFor='composants_utilises'
+                  className='mb-2 block font-medium text-gray-800'
+                >
+                  Sélectionnez les composants utilisés
+                </label>
+                <div className='relative'>
+                  <select
+                    id='composants_utilises'
+                    name='composants_utilises'
+                    multiple
+                    value={selectedComponents.map((id) => id.toString())}
+                    onChange={handleComponentChange}
+                    className='w-full appearance-none rounded-md border border-blue-200 bg-white px-4 py-3 text-sm shadow-inner focus:border-blue-400 focus:outline-none focus:ring focus:ring-blue-200/50'
+                    size={6}
+                    style={{
+                      scrollbarWidth: 'thin',
+                      scrollbarColor: '#3B82F6 #EFF6FF',
+                    }}
+                  >
+                    {composants.map((composant) => (
+                      <option
+                        key={composant.id}
+                        value={composant.id}
+                        className='mb-1 cursor-pointer border-b border-blue-50 px-1 py-2 last:border-0 hover:bg-blue-50'
+                      >
+                        <span className='font-medium'>
+                          {composant.designation}
+                        </span>{' '}
+                        {composant.model_reference && (
+                          <span className='text-gray-500'>
+                            ({composant.model_reference})
+                          </span>
+                        )}{' '}
+                        -{' '}
+                        <span className='text-blue-600'>
+                          {composant.quantity} en stock
+                        </span>
+                      </option>
+                    ))}
+                  </select>
+                  <div className='pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3'>
+                    <svg
+                      className='size-5 text-blue-400'
+                      xmlns='http://www.w3.org/2000/svg'
+                      viewBox='0 0 20 20'
+                      fill='currentColor'
+                      aria-hidden='true'
+                    >
+                      <path
+                        fillRule='evenodd'
+                        d='M10 3a1 1 0 01.707.293l3 3a1 1 0 01-1.414 1.414L10 5.414 7.707 7.707a1 1 0 01-1.414-1.414l3-3A1 1 0 0110 3zm-3.707 9.293a1 1 0 011.414 0L10 14.586l2.293-2.293a1 1 0 011.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z'
+                        clipRule='evenodd'
+                      />
+                    </svg>
+                  </div>
+                </div>
+                <div className='mt-2 flex items-center gap-2 text-xs text-gray-500'>
+                  <span className='flex size-5 items-center justify-center rounded-full bg-blue-100 text-xs text-blue-600'>
+                    <svg
+                      xmlns='http://www.w3.org/2000/svg'
+                      className='size-3'
+                      fill='none'
+                      viewBox='0 0 24 24'
+                      stroke='currentColor'
+                      strokeWidth={2}
+                    >
+                      <path
+                        strokeLinecap='round'
+                        strokeLinejoin='round'
+                        d='M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z'
+                      />
+                    </svg>
+                  </span>
+                  <span>
+                    Maintenez{' '}
+                    <kbd className='rounded border border-gray-300 bg-gray-100 px-1 font-sans font-semibold'>
+                      Ctrl
+                    </kbd>{' '}
+                    (ou{' '}
+                    <kbd className='rounded border border-gray-300 bg-gray-100 px-1 font-sans font-semibold'>
+                      Cmd
+                    </kbd>{' '}
+                    sur Mac) pour sélectionner plusieurs composants
+                  </span>
+                </div>
+              </div>
+
+              {/* Show selected components in a more stylish way */}
+              <div className='mb-4 rounded-lg border border-blue-100 bg-white p-4 shadow'>
+                <h4 className='mb-3 border-b border-blue-100 pb-2 font-semibold text-gray-900'>
+                  Composants sélectionnés
+                </h4>
+                {selectedComponents.length > 0 ? (
+                  <div className='grid grid-cols-1 gap-2 md:grid-cols-2'>
+                    {selectedComponents.map((id) => {
+                      const composant = composants.find((c) => c.id === id);
+                      return (
+                        <div
+                          key={id}
+                          className='flex items-center gap-3 rounded-md border border-blue-100 bg-blue-50 p-2 transition hover:bg-blue-100'
+                        >
+                          <div className='flex size-8 shrink-0 items-center justify-center rounded-full bg-blue-200 font-bold text-blue-700'>
+                            {composant?.type_composant === 'Nouveau'
+                              ? 'N'
+                              : 'A'}
+                          </div>
+                          <div className='grow overflow-hidden'>
+                            <p className='truncate font-medium text-gray-800'>
+                              {composant?.designation || `Composant #${id}`}
+                            </p>
+                            <div className='flex justify-between text-xs text-gray-500'>
+                              <span>
+                                Réf: {composant?.model_reference || 'N/A'}
+                              </span>
+                              <span>Stock: {composant?.quantity || 0}</span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 ) : (
-                  <p className='text-gray-500'>
-                    Aucun composant utilisé pour cette intervention
-                  </p>
+                  <div className='flex items-center justify-center rounded-md bg-gray-50 py-4 text-gray-500'>
+                    <svg
+                      xmlns='http://www.w3.org/2000/svg'
+                      className='mr-2 size-5 text-gray-400'
+                      fill='none'
+                      viewBox='0 0 24 24'
+                      stroke='currentColor'
+                    >
+                      <path
+                        strokeLinecap='round'
+                        strokeLinejoin='round'
+                        strokeWidth={2}
+                        d='M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z'
+                      />
+                    </svg>
+                    Aucun composant sélectionné pour cette intervention
+                  </div>
                 )}
               </div>
             </div>
@@ -514,22 +767,24 @@ export default function InterventionDetailsPage() {
           </fetcher.Form>
 
           {/* Action buttons for finalizing or marking as irreparable */}
-          <div className='mt-8 flex justify-center space-x-4'>
-            <Button
-              onClick={() => setShowConfirmModal('irreparable')}
-              className='bg-red-600 px-8 py-2 text-white hover:bg-red-700 disabled:opacity-70'
-              disabled={isSubmitting || intervention.status === 'Irreparable'}
-            >
-              Irréparable
-            </Button>
-            <Button
-              onClick={() => setShowConfirmModal('finaliser')}
-              className='bg-green-600 px-8 py-2 text-white hover:bg-green-700 disabled:opacity-70'
-              disabled={isSubmitting || intervention.status === 'Termine'}
-            >
-              Finaliser
-            </Button>
-          </div>
+          {intervention.status === 'enCours' && (
+            <div className='mt-8 flex justify-center space-x-4'>
+              <Button
+                onClick={() => setShowConfirmModal('irreparable')}
+                className='bg-red-600 px-8 py-2 text-white hover:bg-red-700 disabled:opacity-70'
+                disabled={isSubmitting}
+              >
+                Irréparable
+              </Button>
+              <Button
+                onClick={() => setShowConfirmModal('finaliser')}
+                className='bg-green-600 px-8 py-2 text-white hover:bg-green-700 disabled:opacity-70'
+                disabled={isSubmitting}
+              >
+                Finaliser
+              </Button>
+            </div>
+          )}
         </div>
 
         {/* Confirmation Modal for actions */}
@@ -574,6 +829,59 @@ export default function InterventionDetailsPage() {
                   )}
                 </Button>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Success Modal for Finaliser action */}
+        {actionSuccessModal === 'finaliser' && (
+          <div className='fixed inset-0 z-50 flex items-center justify-center bg-white/40 backdrop-blur-sm'>
+            <div className='w-[90%] max-w-lg rounded-lg border border-blue-400 bg-white p-8 text-center shadow-lg'>
+              <img
+                src='/check.png'
+                alt='Success'
+                className='mx-auto mb-4 w-14'
+              />
+              <h3 className='mb-2 text-lg font-semibold text-black'>
+                Intervention finalisée avec succès
+              </h3>
+              <p className='mb-6 text-sm text-gray-600'>
+                L&apos;intervention a été marquée comme terminée et la date de
+                sortie a été définie à aujourd&apos;hui.
+              </p>
+              <Button
+                onClick={handleSuccessClose}
+                className='mx-auto rounded-md bg-[#1D6BF3] font-medium text-white hover:bg-blue-700'
+              >
+                OK
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* Success Modal for Irreparable action */}
+        {actionSuccessModal === 'irreparable' && (
+          <div className='fixed inset-0 z-50 flex items-center justify-center bg-white/40 backdrop-blur-sm'>
+            <div className='w-[90%] max-w-lg rounded-lg border border-blue-400 bg-white p-8 text-center shadow-lg'>
+              <img
+                src='/check.png'
+                alt='Success'
+                className='mx-auto mb-4 w-14'
+              />
+              <h3 className='mb-2 text-lg font-semibold text-black'>
+                Intervention marquée comme irréparable
+              </h3>
+              <p className='mb-6 text-sm text-gray-600'>
+                L&apos;intervention a été marquée comme irréparable et un nouvel
+                équipement a été créé avec le statut{' '}
+                <b className='text-red-700'>Irréparable</b>.
+              </p>
+              <Button
+                onClick={handleSuccessClose}
+                className='mx-auto rounded-md bg-[#1D6BF3] font-medium text-white hover:bg-blue-700'
+              >
+                OK
+              </Button>
             </div>
           </div>
         )}
