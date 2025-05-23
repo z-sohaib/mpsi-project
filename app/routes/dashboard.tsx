@@ -356,9 +356,6 @@ export default function Dashboard() {
               availableYears={availableYears}
             />
           </div>
-          <div className='mt-6 overflow-x-auto rounded-xl border border-gray-200/50 bg-white/90 p-6 shadow-lg backdrop-blur-md'>
-            <ComponentsTable />
-          </div>
         </div>
       </div>
     </div>
