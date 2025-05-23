@@ -7,7 +7,6 @@ import {
   useNavigate,
   useFetcher,
   useActionData,
-  Form,
 } from '@remix-run/react';
 import {
   LoaderFunctionArgs,
@@ -18,6 +17,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { requireUserId } from '~/session.server';
 import { fetchDemandeById, updateDemandeById } from '~/models/demandes.server';
+import { createInterventionFromDemande } from '~/models/interventions.server';
 
 // Types for the API data
 type PrioriteType = 'Haute' | 'Moyenne' | 'Basse';
@@ -116,7 +116,7 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
   }
 }
 
-// Updated action function to handle all operations
+// Updated action function to handle intervention creation when accepting a demande
 export async function action({ request, params }: ActionFunctionArgs) {
   try {
     const session = await requireUserId(request);
@@ -136,11 +136,35 @@ export async function action({ request, params }: ActionFunctionArgs) {
     try {
       // Handle different action types
       switch (action) {
-        case 'accept':
+        case 'accept': {
+          // First update the demande status
           await updateDemandeById(session.access, demandeId, {
             status_demande: 'Acceptee',
           });
-          return data({ success: true, action: 'accept' });
+
+          // Get the detailed demande to create intervention
+          const demande = await fetchDemandeById(session.access, demandeId);
+
+          if (!demande) {
+            throw new Error('Demande not found');
+          }
+
+          // Create intervention based on demande
+          const intervention = await createInterventionFromDemande(
+            session.access,
+            Number(demandeId),
+            {
+              panne_trouvee: (formData.get('panneTrouvee') as string) || '',
+            },
+          );
+
+          // Return success with the intervention ID for redirection
+          return data({
+            success: true,
+            action: 'accept',
+            interventionId: intervention.id,
+          });
+        }
 
         case 'reject': {
           const rejectionReason = formData.get('rejectionReason') as string;
@@ -203,13 +227,15 @@ type ActionData = {
   action?: 'accept' | 'reject' | 'save';
   message?: string;
   error?: string;
+  interventionId?: number;
 };
 
 export default function DemandeDetailleePage() {
   const { demande, error: loaderError } = useLoaderData<LoaderData>();
   const actionData = useActionData<ActionData>();
-  const acceptRejectFetcher = useFetcher();
-  const saveFetcher = useFetcher();
+  const acceptFetcher = useFetcher<ActionData>();
+  const rejectFetcher = useFetcher<ActionData>();
+  const saveFetcher = useFetcher<ActionData>();
 
   const [showSuccess, setShowSuccess] = useState(false);
   const [showFailure, setShowFailure] = useState(false);
@@ -224,11 +250,10 @@ export default function DemandeDetailleePage() {
   const navigate = useNavigate();
 
   // Track fetcher states for loading indicators
-  const isLoading =
-    acceptRejectFetcher.state === 'submitting' ||
-    saveFetcher.state === 'submitting' ||
-    acceptRejectFetcher.state === 'loading' ||
-    saveFetcher.state === 'loading';
+  const isSaveLoading = saveFetcher.state !== 'idle';
+  const isAcceptLoading = acceptFetcher.state !== 'idle';
+  const isRejectLoading = rejectFetcher.state !== 'idle';
+  const isAnyLoading = isSaveLoading || isAcceptLoading || isRejectLoading;
 
   // Track if fields are modified
   useEffect(() => {
@@ -245,28 +270,57 @@ export default function DemandeDetailleePage() {
 
   // Watch for successful save actions to show toast
   useEffect(() => {
-    if (actionData?.success && actionData.action === 'save') {
+    if (saveFetcher.data?.success && saveFetcher.data.action === 'save') {
       setShowToast(true);
       const timer = setTimeout(() => {
         setShowToast(false);
       }, 3000);
       return () => clearTimeout(timer);
+    } else if (saveFetcher.data?.error) {
+      setError(saveFetcher.data.error);
+    }
+  }, [saveFetcher.data]);
+
+  // Watch for rejectFetcher success to close modal and navigate
+  useEffect(() => {
+    if (rejectFetcher.data?.success && rejectFetcher.state === 'idle') {
+      setShowFailure(false);
+      navigate('/demandes');
+    } else if (rejectFetcher.data?.error) {
+      setError(rejectFetcher.data.error);
+      setShowFailure(false); // Close the modal on error
+    }
+  }, [rejectFetcher.data, rejectFetcher.state, navigate]);
+
+  // Watch for acceptFetcher success to either redirect or show success modal
+  useEffect(() => {
+    if (acceptFetcher.data?.success && acceptFetcher.state === 'idle') {
+      if (acceptFetcher.data.interventionId) {
+        navigate(`/interventions/${acceptFetcher.data.interventionId}`);
+      } else {
+        setShowSuccess(true);
+      }
+    } else if (acceptFetcher.data?.error) {
+      setError(acceptFetcher.data.error);
+    }
+  }, [acceptFetcher.data, acceptFetcher.state, navigate]);
+
+  // Watch for actionData errors
+  useEffect(() => {
+    if (actionData?.error) {
+      setError(actionData.error);
     }
   }, [actionData]);
 
-  // Watch for action data changes to handle modals
+  // Clear error after a timeout
   useEffect(() => {
-    if (actionData?.success) {
-      if (actionData.action === 'accept') {
-        setShowSuccess(true);
-      } else if (actionData.action === 'reject') {
-        // Redirect after rejection
-        navigate('/demandes/interventions');
-      }
-    } else if (actionData?.error) {
-      setError(actionData.error);
+    if (error) {
+      const timer = setTimeout(() => {
+        setError(null);
+      }, 5000); // Clear error after 5 seconds
+      return () => clearTimeout(timer);
     }
-  }, [actionData, navigate]);
+  }, [error]);
 
   // Format the date for input fields
   const formatDateForInput = (dateString: string) => {
@@ -286,7 +340,7 @@ export default function DemandeDetailleePage() {
         {/* Toast notification */}
         {showToast && (
           <div className='fixed bottom-4 right-4 z-50 rounded-md bg-green-500 px-4 py-2 text-white shadow-lg'>
-            {actionData?.message}
+            {actionData?.message || saveFetcher.data?.message}
           </div>
         )}
 
@@ -295,7 +349,7 @@ export default function DemandeDetailleePage() {
             Demande détaillée
           </h2>
 
-          {isLoading && (
+          {isAnyLoading && (
             <div className='flex justify-center py-4'>
               <div className='size-8 animate-spin rounded-full border-b-2 border-mpsi'></div>
             </div>
@@ -304,6 +358,13 @@ export default function DemandeDetailleePage() {
           {error && (
             <div className='mb-4 rounded-md bg-red-100 p-4 text-red-700'>
               {error}
+              <button
+                onClick={() => setError(null)}
+                className='ml-2 font-bold'
+                aria-label='Dismiss error'
+              >
+                ×
+              </button>
             </div>
           )}
 
@@ -508,7 +569,7 @@ export default function DemandeDetailleePage() {
                 <Button
                   type='submit'
                   className='flex items-center gap-2 bg-blue-500 px-8 hover:bg-blue-600'
-                  disabled={isLoading}
+                  disabled={isAnyLoading}
                 >
                   {saveFetcher.state !== 'idle' ? (
                     <>
@@ -540,23 +601,31 @@ export default function DemandeDetailleePage() {
             <Button
               className='bg-red-500 px-8 hover:bg-red-600'
               onClick={() => setShowFailure(true)}
-              disabled={isLoading}
+              disabled={isAnyLoading}
               type='button'
             >
               Refuser
             </Button>
 
             {/* Form for acceptance */}
-            <Form method='post'>
+            <acceptFetcher.Form method='post'>
               <input type='hidden' name='action' value='accept' />
+              <input type='hidden' name='panneTrouvee' value={panneTrouvee} />
               <Button
                 type='submit'
                 className='bg-green-500 px-8 hover:bg-green-600'
-                disabled={isLoading}
+                disabled={isAnyLoading}
               >
-                Accepter
+                {isAcceptLoading ? (
+                  <div className='flex items-center gap-2'>
+                    <div className='size-4 animate-spin rounded-full border-2 border-white border-t-transparent'></div>
+                    <span>Traitement...</span>
+                  </div>
+                ) : (
+                  'Accepter'
+                )}
               </Button>
-            </Form>
+            </acceptFetcher.Form>
           </div>
 
           {/* Success Modal - Shown after acceptance */}
@@ -633,7 +702,7 @@ export default function DemandeDetailleePage() {
             )}
           </AnimatePresence>
 
-          {/* Rejection Modal - Updated to use normal Form */}
+          {/* Rejection Modal - Updated to use rejectFetcher */}
           <AnimatePresence>
             {showFailure && (
               <motion.div
@@ -693,7 +762,7 @@ export default function DemandeDetailleePage() {
                     l&apos;informer.
                   </motion.p>
 
-                  <Form method='post' onSubmit={() => setShowFailure(false)}>
+                  <rejectFetcher.Form method='post'>
                     <motion.div
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
@@ -720,7 +789,7 @@ export default function DemandeDetailleePage() {
                         onClick={() => setShowFailure(false)}
                         type='button'
                         className='rounded-lg bg-gray-200 px-5 py-2.5 font-medium text-gray-800 transition-all duration-200 hover:bg-gray-300'
-                        disabled={isLoading}
+                        disabled={isRejectLoading}
                       >
                         Annuler
                       </Button>
@@ -728,16 +797,19 @@ export default function DemandeDetailleePage() {
                       <Button
                         type='submit'
                         className='rounded-lg bg-[#1D6BF3] px-5 py-2.5 font-medium text-white shadow-md transition-all duration-200 hover:bg-blue-700 hover:shadow-lg'
-                        disabled={isLoading}
+                        disabled={isRejectLoading}
                       >
-                        {isLoading ? (
-                          <span className='inline-block size-4 animate-spin rounded-full border-2 border-solid border-current border-r-transparent'></span>
+                        {isRejectLoading ? (
+                          <div className='flex items-center gap-2'>
+                            <div className='size-4 animate-spin rounded-full border-2 border-white border-t-transparent'></div>
+                            <span>Traitement...</span>
+                          </div>
                         ) : (
                           'Confirmer'
                         )}
                       </Button>
                     </motion.div>
-                  </Form>
+                  </rejectFetcher.Form>
                 </motion.div>
               </motion.div>
             )}

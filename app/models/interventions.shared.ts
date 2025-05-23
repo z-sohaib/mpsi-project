@@ -5,45 +5,23 @@
 
 import { Composant } from './composant.server';
 
-export type PrioriteType = 'Haute' | 'Moyenne' | 'Basse';
-export type StatusInterventionType = 'Termine' | 'enCours' | 'Irreparable';
-
 export interface Intervention {
   id: number;
   composants_utilises: Composant[];
   created_at: string;
   numero_serie: string;
-  priorite: PrioriteType;
+  priorite: 'Haute' | 'Moyenne' | 'Basse';
   panne_trouvee: string;
-  status: StatusInterventionType;
+  status: 'Termine' | 'enCours' | 'Irreparable';
   date_sortie: string | null;
   demande_id: number;
   technicien: number;
 }
 
-export interface FilterOption {
-  label: string;
-  value: string;
-}
-
 /**
  * Helper function for formatting dates consistently
+ * Safe to use on both client and server
  */
 export function formatDate(dateString: string): string {
-  if (!dateString) return 'Non définie';
-  return new Date(dateString).toLocaleDateString('fr-FR', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-  });
-}
-
-/**
- * Filter interventions by status
- */
-export function filterInterventionsByStatus(
-  interventions: Intervention[],
-  status: StatusInterventionType,
-): Intervention[] {
-  return interventions.filter((intervention) => intervention.status === status);
+  return new Date(dateString).toLocaleDateString('fr-FR');
 }
