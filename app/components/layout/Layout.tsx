@@ -11,13 +11,17 @@ interface LayoutProps {
 export default function Layout({ children }: LayoutProps) {
   return (
     <div className='flex min-h-screen bg-gray-100'>
-      <div className='hidden lg:block'>
+      {/* Fixed sidebar that stays in place */}
+      <div className='fixed left-0 top-0 hidden h-full lg:block'>
         <Sidebar />
       </div>
-      <div className='flex flex-1 flex-col'>
-        {/* Pass userInfo to Topbar */}
+
+      {/* Main content with left padding to account for sidebar width */}
+      <div className='flex w-full flex-col lg:pl-64'>
         <Topbar />
-        <main className='mt-8 flex-1 overflow-y-auto'>{children}</main>
+        <main className='mt-8 flex-1 overflow-y-auto px-4 pb-8'>
+          {children}
+        </main>
       </div>
     </div>
   );

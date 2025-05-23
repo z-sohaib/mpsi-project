@@ -386,33 +386,6 @@ export default function EquipementDetailsPage() {
             </div>
           </div>
 
-          {/* Equipment details section */}
-          <div className='mt-8'>
-            <div className='rounded-md border border-gray-200 bg-gray-50 p-4'>
-              <h3 className='mb-2 font-semibold text-gray-700'>
-                Informations complémentaires
-              </h3>
-              <div className='grid grid-cols-1 gap-2 text-sm md:grid-cols-2'>
-                <div>
-                  <span className='font-medium text-gray-600'>
-                    Dernière mise à jour:
-                  </span>{' '}
-                  <span className='text-gray-800'>
-                    {equipement.modified_at
-                      ? formatDateForDisplay(equipement.modified_at)
-                      : 'Jamais'}
-                  </span>
-                </div>
-                <div>
-                  <span className='font-medium text-gray-600'>Créé le:</span>{' '}
-                  <span className='text-gray-800'>
-                    {formatDateForDisplay(equipement.created_at)}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-
           {/* Related data section - This could be used to show interventions linked to this equipment */}
           <div className='mt-6'>
             <Link
