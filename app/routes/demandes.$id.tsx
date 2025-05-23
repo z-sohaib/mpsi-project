@@ -17,6 +17,10 @@ import {
 import { requireUserId } from '~/session.server';
 import { fetchDemandeById, updateDemandeById } from '~/models/demandes.server';
 import { createInterventionFromDemande } from '~/models/interventions.server';
+import {
+  sendRequestAcceptedEmail,
+  sendRequestRejectedEmail,
+} from '~/utils/email.server';
 
 // Types for the API data
 type PrioriteType = 'Haute' | 'Moyenne' | 'Basse';
@@ -133,6 +137,13 @@ export async function action({ request, params }: ActionFunctionArgs) {
     }
 
     try {
+      // Get the detailed demande to use for sending emails
+      const demande = await fetchDemandeById(session.access, demandeId);
+
+      if (!demande) {
+        throw new Error('Demande not found');
+      }
+
       // Handle different action types
       switch (action) {
         case 'accept': {
@@ -140,13 +151,6 @@ export async function action({ request, params }: ActionFunctionArgs) {
           await updateDemandeById(session.access, demandeId, {
             status_demande: 'Acceptee',
           });
-
-          // Get the detailed demande to create intervention
-          const demande = await fetchDemandeById(session.access, demandeId);
-
-          if (!demande) {
-            throw new Error('Demande not found');
-          }
 
           // Create intervention based on demande
           const intervention = await createInterventionFromDemande(
@@ -156,6 +160,16 @@ export async function action({ request, params }: ActionFunctionArgs) {
               panne_trouvee: (formData.get('panneTrouvee') as string) || '',
             },
           );
+
+          // Send email notification about acceptance
+          if (demande.email && demande.nom_deposant) {
+            await sendRequestAcceptedEmail(
+              session.access,
+              demande.email,
+              demande.nom_deposant,
+              demande.numero_inventaire || '',
+            );
+          }
 
           // Return success with the intervention ID for redirection
           return data({
@@ -167,10 +181,24 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
         case 'reject': {
           const rejectionReason = formData.get('rejectionReason') as string;
+
+          // Update demande status with rejection reason
           await updateDemandeById(session.access, demandeId, {
             status_demande: 'Rejetee',
             rejection_reason: rejectionReason,
           });
+
+          // Send rejection email with the cause
+          if (demande.email && demande.nom_deposant) {
+            await sendRequestRejectedEmail(
+              session.access,
+              demande.email,
+              demande.nom_deposant,
+              demande.numero_inventaire || '',
+              rejectionReason || 'Non spécifiée',
+            );
+          }
+
           return data({ success: true, action: 'reject' });
         }
 
