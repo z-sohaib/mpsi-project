@@ -14,7 +14,6 @@ import {
   data,
   redirect,
 } from '@remix-run/node';
-import { motion, AnimatePresence } from 'framer-motion';
 import { requireUserId } from '~/session.server';
 import { fetchDemandeById, updateDemandeById } from '~/models/demandes.server';
 import { createInterventionFromDemande } from '~/models/interventions.server';
@@ -241,10 +240,8 @@ export default function DemandeDetailleePage() {
   const [showFailure, setShowFailure] = useState(false);
   const [rejectionReason, setRejectionReason] = useState('');
   const [error, setError] = useState<string | null>(loaderError || null);
-  const [panneTrouvee, setPanneTrouvee] = useState(demande.panne_trouvee || '');
-  const [materielsInstalles, setMaterielsInstalles] = useState(
-    demande.materiels_installes || '',
-  );
+
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [modified, setModified] = useState(false);
   const [showToast, setShowToast] = useState(false);
   const navigate = useNavigate();
@@ -254,19 +251,6 @@ export default function DemandeDetailleePage() {
   const isAcceptLoading = acceptFetcher.state !== 'idle';
   const isRejectLoading = rejectFetcher.state !== 'idle';
   const isAnyLoading = isSaveLoading || isAcceptLoading || isRejectLoading;
-
-  // Track if fields are modified
-  useEffect(() => {
-    setModified(
-      panneTrouvee !== (demande.panne_trouvee || '') ||
-        materielsInstalles !== (demande.materiels_installes || ''),
-    );
-  }, [
-    panneTrouvee,
-    materielsInstalles,
-    demande.panne_trouvee,
-    demande.materiels_installes,
-  ]);
 
   // Watch for successful save actions to show toast
   useEffect(() => {
@@ -295,15 +279,11 @@ export default function DemandeDetailleePage() {
   // Watch for acceptFetcher success to either redirect or show success modal
   useEffect(() => {
     if (acceptFetcher.data?.success && acceptFetcher.state === 'idle') {
-      if (acceptFetcher.data.interventionId) {
-        navigate(`/interventions/${acceptFetcher.data.interventionId}`);
-      } else {
-        setShowSuccess(true);
-      }
+      setShowSuccess(true);
     } else if (acceptFetcher.data?.error) {
       setError(acceptFetcher.data.error);
     }
-  }, [acceptFetcher.data, acceptFetcher.state, navigate]);
+  }, [acceptFetcher.data, acceptFetcher.state]);
 
   // Watch for actionData errors
   useEffect(() => {
@@ -326,12 +306,6 @@ export default function DemandeDetailleePage() {
   const formatDateForInput = (dateString: string) => {
     if (!dateString) return '';
     return dateString.split('T')[0];
-  };
-
-  // Handle modal close and navigation back to list
-  const handleSuccessClose = () => {
-    setShowSuccess(false);
-    navigate('/demandes');
   };
 
   return (
@@ -421,24 +395,6 @@ export default function DemandeDetailleePage() {
               />
             </div>
 
-            {/* Panne trouvée */}
-            <div className='w-full'>
-              <label
-                htmlFor='panneTrouvee'
-                className='mb-1 block text-sm font-medium text-gray-700'
-              >
-                Panne trouvée
-              </label>
-              <textarea
-                id='panneTrouvee'
-                name='panneTrouvee'
-                rows={1}
-                value={panneTrouvee}
-                onChange={(e) => setPanneTrouvee(e.target.value)}
-                className='w-full rounded-md border px-3 py-2 text-sm transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500'
-              />
-            </div>
-
             {/* Type matériel */}
             <div className='w-full'>
               <label
@@ -458,17 +414,17 @@ export default function DemandeDetailleePage() {
             {/* Matériels installés */}
             <div className='w-full'>
               <label
-                htmlFor='materielsInstalles'
+                htmlFor='status'
                 className='mb-1 block text-sm font-medium text-gray-700'
               >
-                Matériels installés
+                Type déposant
               </label>
               <Input
-                id='materielsInstalles'
-                name='materielsInstalles'
-                value={materielsInstalles}
-                onChange={(e) => setMaterielsInstalles(e.target.value)}
-                className='w-full rounded-md border px-3 py-2 text-sm transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500'
+                id='status'
+                name='status'
+                value={demande.status || ''}
+                readOnly
+                className='w-full bg-gray-100'
               />
             </div>
 
@@ -595,225 +551,146 @@ export default function DemandeDetailleePage() {
             </div>
           </saveFetcher.Form>
 
-          {/* Form for accept/reject actions */}
-          <div className='mt-6 flex justify-center gap-6'>
-            {/* Button to open reject modal */}
-            <Button
-              className='bg-red-500 px-8 hover:bg-red-600'
-              onClick={() => setShowFailure(true)}
-              disabled={isAnyLoading}
-              type='button'
-            >
-              Refuser
-            </Button>
-
-            {/* Form for acceptance */}
-            <acceptFetcher.Form method='post'>
-              <input type='hidden' name='action' value='accept' />
-              <input type='hidden' name='panneTrouvee' value={panneTrouvee} />
+          {demande.status_demande === 'Nouvelle' && (
+            <div className='mt-6 flex justify-center gap-6'>
+              {/* Button to open reject modal */}
               <Button
-                type='submit'
-                className='bg-green-500 px-8 hover:bg-green-600'
+                className='bg-red-500 px-8 hover:bg-red-600'
+                onClick={() => setShowFailure(true)}
                 disabled={isAnyLoading}
+                type='button'
               >
-                {isAcceptLoading ? (
-                  <div className='flex items-center gap-2'>
-                    <div className='size-4 animate-spin rounded-full border-2 border-white border-t-transparent'></div>
-                    <span>Traitement...</span>
-                  </div>
-                ) : (
-                  'Accepter'
-                )}
+                Refuser
               </Button>
-            </acceptFetcher.Form>
-          </div>
+
+              {/* Form for acceptance */}
+              <acceptFetcher.Form method='post'>
+                <input type='hidden' name='action' value='accept' />
+                <Button
+                  type='submit'
+                  className='bg-green-500 px-8 hover:bg-green-600'
+                  disabled={isAnyLoading}
+                >
+                  {isAcceptLoading ? (
+                    <div className='flex items-center gap-2'>
+                      <div className='size-4 animate-spin rounded-full border-2 border-white border-t-transparent'></div>
+                      <span>Traitement...</span>
+                    </div>
+                  ) : (
+                    'Accepter'
+                  )}
+                </Button>
+              </acceptFetcher.Form>
+            </div>
+          )}
 
           {/* Success Modal - Shown after acceptance */}
-          <AnimatePresence>
-            {showSuccess && (
-              <motion.div
-                className='fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm'
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-              >
-                <motion.div
-                  className='w-[90%] max-w-lg rounded-xl border border-blue-400 bg-white p-8 text-center shadow-xl'
-                  initial={{ scale: 0.9, y: 20 }}
-                  animate={{ scale: 1, y: 0 }}
-                  exit={{ scale: 0.9, y: 20 }}
-                  transition={{ type: 'spring', damping: 15 }}
+          {showSuccess && (
+            <div className='fixed inset-0 z-50 flex items-center justify-center bg-white/40 backdrop-blur-sm'>
+              <div className='w-[90%] max-w-lg rounded-lg border border-blue-400 bg-white p-8 text-center shadow-lg'>
+                <img
+                  src='/check.png'
+                  alt='Success'
+                  className='mx-auto mb-4 w-14'
+                />
+                <h3 className='mb-2 text-lg font-semibold text-black'>
+                  Demande acceptée avec succès
+                </h3>
+                <p className='mb-6 text-sm text-gray-600'>
+                  Un email a été envoyé à{' '}
+                  <span className='font-medium'>{demande.email}</span> pour
+                  l&apos;informer.
+                </p>
+                <Button
+                  onClick={() => {
+                    if (acceptFetcher.data?.interventionId) {
+                      navigate(
+                        `/interventions/${acceptFetcher.data.interventionId}`,
+                      );
+                    } else {
+                      navigate('/demandes');
+                    }
+                  }}
+                  className='mx-auto rounded-md bg-[#1D6BF3] font-medium text-white hover:bg-blue-700'
                 >
-                  <motion.div
-                    className='mx-auto mb-4 flex size-16 items-center justify-center rounded-full bg-green-100'
-                    initial={{ rotate: -90, opacity: 0 }}
-                    animate={{ rotate: 0, opacity: 1 }}
-                    transition={{ delay: 0.2, duration: 0.5 }}
-                  >
-                    <svg
-                      className='size-10 text-green-600'
-                      fill='none'
-                      viewBox='0 0 24 24'
-                      stroke='currentColor'
-                    >
-                      <motion.path
-                        strokeLinecap='round'
-                        strokeLinejoin='round'
-                        strokeWidth='2'
-                        d='M5 13l4 4L19 7'
-                        initial={{ pathLength: 0 }}
-                        animate={{ pathLength: 1 }}
-                        transition={{ delay: 0.4, duration: 0.6 }}
-                      />
-                    </svg>
-                  </motion.div>
-                  <motion.h3
-                    className='mb-2 text-xl font-semibold text-gray-900'
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.3 }}
-                  >
-                    Demande acceptée avec succès
-                  </motion.h3>
-                  <motion.p
-                    className='mb-6 text-sm text-gray-600'
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ delay: 0.4 }}
-                  >
-                    Un email a été envoyé à{' '}
-                    <span className='font-medium'>{demande.email}</span> pour
-                    l&apos;informer.
-                  </motion.p>
-                  <motion.div
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.5 }}
-                  >
-                    <Button
-                      onClick={handleSuccessClose}
-                      className='mx-auto rounded-lg bg-[#1D6BF3] px-6 py-2.5 font-medium text-white shadow-md transition-all duration-200 hover:bg-blue-700 hover:shadow-lg'
-                    >
-                      OK
-                    </Button>
-                  </motion.div>
-                </motion.div>
-              </motion.div>
-            )}
-          </AnimatePresence>
+                  OK
+                </Button>
+              </div>
+            </div>
+          )}
 
           {/* Rejection Modal - Updated to use rejectFetcher */}
-          <AnimatePresence>
-            {showFailure && (
-              <motion.div
-                className='fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm'
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-              >
-                <motion.div
-                  className='w-[90%] max-w-lg rounded-xl border border-gray-200 bg-white p-8 text-center shadow-xl'
-                  initial={{ scale: 0.9, y: 20 }}
-                  animate={{ scale: 1, y: 0 }}
-                  exit={{ scale: 0.9, y: 20 }}
-                  transition={{ type: 'spring', damping: 15 }}
-                >
-                  <motion.div
-                    className='mx-auto mb-4 flex size-16 items-center justify-center rounded-full bg-red-100'
-                    initial={{ rotate: -90, opacity: 0 }}
-                    animate={{ rotate: 0, opacity: 1 }}
-                    transition={{ delay: 0.2, duration: 0.5 }}
+          {showFailure && (
+            <div className='fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm'>
+              <div className='w-[90%] max-w-lg rounded-xl border border-gray-200 bg-white p-8 text-center shadow-xl'>
+                <div className='mx-auto mb-4 flex size-16 items-center justify-center rounded-full bg-red-100'>
+                  <svg
+                    className='size-10 text-red-600'
+                    fill='none'
+                    viewBox='0 0 24 24'
+                    stroke='currentColor'
                   >
-                    <svg
-                      className='size-10 text-red-600'
-                      fill='none'
-                      viewBox='0 0 24 24'
-                      stroke='currentColor'
+                    <path
+                      strokeLinecap='round'
+                      strokeLinejoin='round'
+                      strokeWidth='2'
+                      d='M6 18L18 6M6 6l12 12'
+                    />
+                  </svg>
+                </div>
+
+                <h3 className='mb-2 text-xl font-semibold text-gray-900'>
+                  Refuser cette demande
+                </h3>
+
+                <p className='mb-4 text-sm text-gray-600'>
+                  Un email sera envoyé à{' '}
+                  <span className='font-medium'>{demande.email}</span> pour
+                  l&apos;informer.
+                </p>
+
+                <rejectFetcher.Form method='post'>
+                  <div>
+                    <input type='hidden' name='action' value='reject' />
+                    <textarea
+                      name='rejectionReason'
+                      value={rejectionReason}
+                      onChange={(e) => setRejectionReason(e.target.value)}
+                      className='mb-6 w-full rounded-md border border-gray-300 px-4 py-3 text-sm transition-all duration-200 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200'
+                      placeholder='Introduire une raison de refus...'
+                      rows={3}
+                    />
+                  </div>
+
+                  <div className='flex justify-center gap-4'>
+                    <Button
+                      onClick={() => setShowFailure(false)}
+                      type='button'
+                      className='rounded-lg bg-gray-200 px-5 py-2.5 font-medium text-gray-800 transition-all duration-200 hover:bg-gray-300'
+                      disabled={isRejectLoading}
                     >
-                      <motion.path
-                        strokeLinecap='round'
-                        strokeLinejoin='round'
-                        strokeWidth='2'
-                        d='M6 18L18 6M6 6l12 12'
-                        initial={{ pathLength: 0 }}
-                        animate={{ pathLength: 1 }}
-                        transition={{ delay: 0.4, duration: 0.6 }}
-                      />
-                    </svg>
-                  </motion.div>
+                      Annuler
+                    </Button>
 
-                  <motion.h3
-                    className='mb-2 text-xl font-semibold text-gray-900'
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.3 }}
-                  >
-                    Refuser cette demande
-                  </motion.h3>
-
-                  <motion.p
-                    className='mb-4 text-sm text-gray-600'
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ delay: 0.4 }}
-                  >
-                    Un email sera envoyé à{' '}
-                    <span className='font-medium'>{demande.email}</span> pour
-                    l&apos;informer.
-                  </motion.p>
-
-                  <rejectFetcher.Form method='post'>
-                    <motion.div
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.45 }}
+                    <Button
+                      type='submit'
+                      className='rounded-lg bg-[#1D6BF3] px-5 py-2.5 font-medium text-white shadow-md transition-all duration-200 hover:bg-blue-700 hover:shadow-lg'
+                      disabled={isRejectLoading}
                     >
-                      <input type='hidden' name='action' value='reject' />
-                      <textarea
-                        name='rejectionReason'
-                        value={rejectionReason}
-                        onChange={(e) => setRejectionReason(e.target.value)}
-                        className='mb-6 w-full rounded-md border border-gray-300 px-4 py-3 text-sm transition-all duration-200 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200'
-                        placeholder='Introduire une raison de refus...'
-                        rows={3}
-                      />
-                    </motion.div>
-
-                    <motion.div
-                      className='flex justify-center gap-4'
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.5 }}
-                    >
-                      <Button
-                        onClick={() => setShowFailure(false)}
-                        type='button'
-                        className='rounded-lg bg-gray-200 px-5 py-2.5 font-medium text-gray-800 transition-all duration-200 hover:bg-gray-300'
-                        disabled={isRejectLoading}
-                      >
-                        Annuler
-                      </Button>
-
-                      <Button
-                        type='submit'
-                        className='rounded-lg bg-[#1D6BF3] px-5 py-2.5 font-medium text-white shadow-md transition-all duration-200 hover:bg-blue-700 hover:shadow-lg'
-                        disabled={isRejectLoading}
-                      >
-                        {isRejectLoading ? (
-                          <div className='flex items-center gap-2'>
-                            <div className='size-4 animate-spin rounded-full border-2 border-white border-t-transparent'></div>
-                            <span>Traitement...</span>
-                          </div>
-                        ) : (
-                          'Confirmer'
-                        )}
-                      </Button>
-                    </motion.div>
-                  </rejectFetcher.Form>
-                </motion.div>
-              </motion.div>
-            )}
-          </AnimatePresence>
+                      {isRejectLoading ? (
+                        <div className='flex items-center gap-2'>
+                          <div className='size-4 animate-spin rounded-full border-2 border-white border-t-transparent'></div>
+                          <span>Traitement...</span>
+                        </div>
+                      ) : (
+                        'Confirmer'
+                      )}
+                    </Button>
+                  </div>
+                </rejectFetcher.Form>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </Layout>

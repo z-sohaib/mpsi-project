@@ -1,4 +1,4 @@
-import { Search, Settings, Bell, MessageCircle } from 'lucide-react';
+import { Bell } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from '@remix-run/react';
 
@@ -33,36 +33,16 @@ export default function Topbar() {
   };
 
   return (
-    <header className='flex items-center justify-between border-b bg-white p-4'>
+    <header className='flex items-center justify-end border-b bg-white p-4'>
       {/* Search Bar */}
-      <div className='flex flex-1 items-center rounded-lg bg-gray-100 px-4 py-2'>
-        <Search className='size-5 text-gray-500' />
-        <input
-          type='text'
-          placeholder='Search...'
-          className='ml-2 w-full bg-transparent outline-none'
-        />
-      </div>
 
       {/* Actions */}
       <div className='ml-4 flex items-center space-x-4'>
-        <button
-          aria-label='Settings'
-          className='rounded-full p-2 text-gray-600 hover:bg-gray-100'
-        >
-          <Settings className='size-5' />
-        </button>
         <button
           aria-label='Notifications'
           className='rounded-full p-2 text-gray-600 hover:bg-gray-100'
         >
           <Bell className='size-5' />
-        </button>
-        <button
-          aria-label='Messages'
-          className='rounded-full p-2 text-gray-600 hover:bg-gray-100'
-        >
-          <MessageCircle className='size-5' />
         </button>
 
         {/* User Info & Avatar */}
