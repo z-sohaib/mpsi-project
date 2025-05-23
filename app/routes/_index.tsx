@@ -1,6 +1,6 @@
 import type { MetaFunction, ActionFunctionArgs } from '@remix-run/node';
 import { useState, useEffect } from 'react';
-import { useFetcher } from '@remix-run/react';
+import { useFetcher, Link } from '@remix-run/react';
 import { json } from '@remix-run/node';
 
 export const meta: MetaFunction = () => [
@@ -141,6 +141,31 @@ export default function Repair() {
     <div className='relative min-h-screen overflow-hidden bg-white font-sans'>
       {/* Top half blue background - reduced height */}
       <div className='absolute left-0 top-0 z-0 h-2/5 w-full bg-[#007bff]' />
+
+      {/* Employee access button */}
+      <div className='absolute left-28 top-6 z-20'>
+        <Link
+          to='/auth'
+          className='flex items-center rounded-md bg-white px-4 py-2 font-medium text-[#007bff] shadow-md transition-all hover:bg-blue-50'
+        >
+          <svg
+            xmlns='http://www.w3.org/2000/svg'
+            className='mr-2 size-5'
+            viewBox='0 0 24 24'
+            fill='none'
+            stroke='currentColor'
+            strokeWidth='2'
+            strokeLinecap='round'
+            strokeLinejoin='round'
+          >
+            <path d='M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2' />
+            <circle cx='9' cy='7' r='4' />
+            <path d='M22 21v-2a4 4 0 0 0-3-3.87' />
+            <path d='M16 3.13a4 4 0 0 1 0 7.75' />
+          </svg>
+          Accès employé
+        </Link>
+      </div>
 
       {/* Man Illustration - positioned lower */}
       <img
