@@ -327,9 +327,43 @@ export default function InterventionDetailsPage() {
     intervention.numero_serie || '',
   );
   const [technicien] = useState(intervention.technicien || 1);
-  const [selectedComponents, setSelectedComponents] = useState<number[]>(
-    intervention.composants_utilises?.map((comp) => comp.id) || [],
-  );
+  // Fixed initialization of selectedComponents with proper console logging for debugging
+  const [selectedComponents, setSelectedComponents] = useState<number[]>(() => {
+    // Log intervention data to understand its structure
+    console.log('Full intervention data:', intervention);
+    console.log('Composants utilises raw:', intervention.composants_utilises);
+
+    // Handle different formats of composants_utilises (API might return array of objects or just IDs)
+    let componentIds: number[] = [];
+
+    if (
+      intervention.composants_utilises &&
+      Array.isArray(intervention.composants_utilises)
+    ) {
+      // If it's an array of objects with id property
+      if (
+        intervention.composants_utilises.length > 0 &&
+        typeof intervention.composants_utilises[0] === 'object'
+      ) {
+        componentIds = intervention.composants_utilises
+          .filter((comp) => comp && typeof comp === 'object' && 'id' in comp)
+          .map((comp) => Number(comp.id))
+          .filter((id) => !isNaN(id));
+
+        console.log('Extracted component IDs from objects:', componentIds);
+      }
+      // If it's an array of numbers or strings
+      else {
+        componentIds = intervention.composants_utilises
+          .map((comp) => Number(comp))
+          .filter((id) => !isNaN(id));
+
+        console.log('Extracted component IDs from array:', componentIds);
+      }
+    }
+
+    return componentIds;
+  });
   const [modified, setModified] = useState(false);
   const [showToast, setShowToast] = useState(false);
   const [error, setError] = useState<string | null>(loaderError || null);
@@ -344,16 +378,27 @@ export default function InterventionDetailsPage() {
 
   // Track if the form has been modified
   useEffect(() => {
-    const originalComponentIds =
-      intervention.composants_utilises?.map((comp) => comp.id) || [];
+    console.log(intervention.composants_utilises);
+    const originalComponentIds = intervention.composants_utilises;
+
+    // check the two arrays for changes
     const componentsChanged =
       selectedComponents.length !== originalComponentIds.length ||
-      !selectedComponents.every((id) => originalComponentIds.includes(id));
+      !selectedComponents.every((id) =>
+        originalComponentIds.some(
+          (comp) => typeof comp === 'number' && comp === id,
+        ),
+      );
+
+    console.log(panneTrouvee !== intervention.panne_trouvee);
+    console.log(priorite !== intervention.priorite);
+    console.log(numeroSerie !== intervention.numero_serie);
+    console.log('Components changed:', componentsChanged);
 
     setModified(
-      panneTrouvee !== (intervention.panne_trouvee || '') ||
-        priorite !== (intervention.priorite || 'Moyenne') ||
-        numeroSerie !== (intervention.numero_serie || '') ||
+      panneTrouvee !== intervention.panne_trouvee ||
+        priorite !== intervention.priorite ||
+        numeroSerie !== intervention.numero_serie ||
         componentsChanged,
     );
   }, [panneTrouvee, priorite, numeroSerie, selectedComponents, intervention]);
@@ -406,12 +451,32 @@ export default function InterventionDetailsPage() {
     fetcher.submit(formData, { method: 'post' });
   };
 
-  // Handle component selection
+  // More robust component selection handler
   const handleComponentChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const selectedOptions = Array.from(e.target.selectedOptions, (option) =>
       Number(option.value),
     );
+
+    console.log('Selected components changed to:', selectedOptions);
     setSelectedComponents(selectedOptions);
+
+    // Force modified state update when components change
+    const originalComponentIds =
+      intervention.composants_utilises
+        ?.map((comp) =>
+          typeof comp === 'object' && comp !== null
+            ? Number(comp.id)
+            : Number(comp),
+        )
+        .filter((id) => !isNaN(id)) || [];
+
+    const componentsChanged =
+      selectedOptions.length !== originalComponentIds.length ||
+      !selectedOptions.every((id) => originalComponentIds.includes(id));
+
+    if (componentsChanged) {
+      setModified(true);
+    }
   };
 
   // Handle navigation after success
@@ -450,6 +515,11 @@ export default function InterventionDetailsPage() {
     intervention,
     isEditable,
   ]);
+
+  // Filter available components for selection - only show those with quantity > 0 and disponible=true
+  const availableComponents = composants.filter(
+    (composant) => composant.quantity > 0 && composant.disponible === true,
+  );
 
   return (
     <Layout>
@@ -702,12 +772,12 @@ export default function InterventionDetailsPage() {
                   Sélectionnez les composants utilisés
                 </label>
                 <div className='relative'>
-                  {/* Make sure to set the name correctly for multiple selections */}
+                  {/* Updated select to only show available components */}
                   <select
                     id='composants_utilises'
                     name='composants_utilises'
                     multiple
-                    value={selectedComponents.map((id) => id.toString())}
+                    value={selectedComponents.map((id) => String(id))}
                     onChange={(e) => isEditable && handleComponentChange(e)}
                     className={`w-full appearance-none rounded-md border border-blue-200 px-4 py-3 text-sm shadow-inner focus:border-blue-400 focus:outline-none focus:ring focus:ring-blue-200/50 ${
                       !isEditable ? 'bg-gray-100 opacity-80' : 'bg-white'
@@ -719,28 +789,34 @@ export default function InterventionDetailsPage() {
                     }}
                     disabled={!isEditable}
                   >
-                    {composants.map((composant) => (
-                      <option
-                        key={composant.id}
-                        value={composant.id}
-                        className={`mb-1 cursor-pointer border-b border-blue-50 px-1 py-2 last:border-0 ${
-                          isEditable ? 'hover:bg-blue-50' : ''
-                        }`}
-                      >
-                        <span className='font-medium'>
-                          {composant.designation}
-                        </span>{' '}
-                        {composant.model_reference && (
-                          <span className='text-gray-500'>
-                            ({composant.model_reference})
+                    {availableComponents.length > 0 ? (
+                      availableComponents.map((composant) => (
+                        <option
+                          key={composant.id}
+                          value={composant.id}
+                          className={`mb-1 cursor-pointer border-b border-blue-50 px-1 py-2 last:border-0 ${
+                            isEditable ? 'hover:bg-blue-50' : ''
+                          }`}
+                        >
+                          <span className='font-medium'>
+                            {composant.designation}
+                          </span>{' '}
+                          {composant.model_reference && (
+                            <span className='text-gray-500'>
+                              ({composant.model_reference})
+                            </span>
+                          )}{' '}
+                          -{' '}
+                          <span className='text-blue-600'>
+                            {composant.quantity} en stock
                           </span>
-                        )}{' '}
-                        -{' '}
-                        <span className='text-blue-600'>
-                          {composant.quantity} en stock
-                        </span>
+                        </option>
+                      ))
+                    ) : (
+                      <option disabled value=''>
+                        Aucun composant disponible en stock
                       </option>
-                    ))}
+                    )}
                   </select>
                   <div className='pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3'>
                     <svg
@@ -791,10 +867,10 @@ export default function InterventionDetailsPage() {
                 )}
               </div>
 
-              {/* Show selected components in a more stylish way */}
+              {/* Show selected components with improved count and display */}
               <div className='mb-4 rounded-lg border border-blue-100 bg-white p-4 shadow'>
                 <h4 className='mb-3 border-b border-blue-100 pb-2 font-semibold text-gray-900'>
-                  Composants sélectionnés
+                  Composants sélectionnés ({selectedComponents.length})
                 </h4>
                 {selectedComponents.length > 0 ? (
                   <div className='grid grid-cols-1 gap-2 md:grid-cols-2'>

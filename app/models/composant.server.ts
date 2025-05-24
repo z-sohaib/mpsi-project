@@ -7,6 +7,7 @@ export interface Composant {
   ref: string;
   categorie: string;
   observation: string;
+  disponible: boolean;
   type_composant: 'Nouveau' | 'Ancien';
   image?: string;
   date_achat?: string;
