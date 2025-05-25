@@ -154,6 +154,40 @@ export async function updateUserById(
 }
 
 /**
+ * Update a user's password
+ */
+export async function updateUserPassword(
+  token: string,
+  userId: string,
+  newPassword: string,
+): Promise<boolean> {
+  try {
+    const response = await fetch(
+      `https://itms-mpsi.onrender.com/api/admin/users/${userId}/password/`,
+      {
+        method: 'PATCH',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify({ password: newPassword }),
+      },
+    );
+
+    if (!response.ok) {
+      console.error('Failed to update password:', response.statusText);
+      throw new Error(`API returned ${response.status}`);
+    }
+
+    return true;
+  } catch (error) {
+    console.error('Failed to update password:', error);
+    throw error;
+  }
+}
+
+/**
  * Delete a user by ID
  */
 export async function deleteUserById(
