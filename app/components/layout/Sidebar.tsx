@@ -6,6 +6,7 @@ import {
   Monitor,
   HelpCircle,
   ChevronRight,
+  Users,
 } from 'lucide-react';
 import { NavLink } from '@remix-run/react';
 
@@ -49,6 +50,11 @@ const sections = [
     links: [
       { name: 'FAQs', path: '/faq' }, // Placeholder, update if needed
     ],
+  },
+  {
+    title: 'Utilisateurs',
+    icon: <Users className='size-4' />,
+    links: [{ name: 'Liste des utilisateurs', path: '/users' }],
   },
 ];
 
