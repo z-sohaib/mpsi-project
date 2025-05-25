@@ -16,14 +16,15 @@ import {
   updateInterventionById,
 } from '~/models/interventions.server';
 import { fetchDemandeById } from '~/models/demandes.server';
-import { Intervention } from '~/models/interventions.shared';
-import { fetchComposants, Composant } from '~/models/composant.server';
+import { fetchComposants } from '~/models/composants.server';
 import { createEquipement } from '~/models/equipements.server';
-import { Equipement } from '~/models/equipements.shared';
 import {
   sendRepairCompletedEmail,
   sendEquipmentIrreparableEmail,
 } from '~/utils/email.server';
+import { Composant } from '~/types/composant';
+import { Intervention } from '~/types/demande';
+import { Equipement } from '~/types/equipement';
 
 // Define types for the loader and action data
 type ActionData = {
@@ -518,7 +519,8 @@ export default function InterventionDetailsPage() {
 
   // Filter available components for selection - only show those with quantity > 0 and disponible=true
   const availableComponents = composants.filter(
-    (composant) => composant.quantity > 0 && composant.disponible === true,
+    (composant) =>
+      (composant.quantity ?? 0) > 0 && composant.disponible === true,
   );
 
   return (

@@ -1,4 +1,4 @@
-import { Equipement } from './equipements.shared';
+import { Equipement } from '~/types/equipement';
 
 /**
  * Fetch all equipements from the API

@@ -1,4 +1,4 @@
-import { Demande, DemandeStatus } from './demandes.shared';
+import { Demande, DemandeStatus } from '~/types/demande';
 
 /**
  * Fetch all demandes from the API

@@ -11,7 +11,8 @@ import {
   fetchInterventions,
   getInterventionFilterOptions,
 } from '~/models/interventions.server';
-import { Intervention, formatDate } from '~/models/interventions.shared';
+import { Intervention } from '~/types/demande';
+import { formatDate } from '~/utils/dates';
 
 // Simple color mapping for status badges
 const statusColors = {

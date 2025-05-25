@@ -2,18 +2,13 @@ import { Bell } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from '@remix-run/react';
 import { useOptionalUser } from '~/utils';
+import { getInitials } from '~/utils/string';
 
 export default function Topbar() {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const user = useOptionalUser();
-
-  // Generate initials for the avatar
-  const getInitials = () => {
-    if (!user?.username) return 'U';
-    return user.username.substring(0, 2).toUpperCase();
-  };
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -66,7 +61,7 @@ export default function Topbar() {
           >
             <div className='size-8 overflow-hidden rounded-full bg-blue-500'>
               <span className='flex h-full items-center justify-center text-white'>
-                {getInitials()}
+                {getInitials(!user?.username ? '' : user.username)}
               </span>
             </div>
             <div className='hidden text-left md:block'>

@@ -12,7 +12,7 @@ import { Button } from '~/components/ui/Button';
 import { Cloud } from 'lucide-react';
 import { requireUserId } from '~/session.server';
 import { fetchComposantById } from '~/models/composants.server';
-import { Composant } from '~/models/composants.shared';
+import { Composant } from '~/types/composant';
 
 // Define categories for the dropdown
 const categories = [

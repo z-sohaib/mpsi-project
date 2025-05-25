@@ -3,49 +3,7 @@
  * that are safe to use on both client and server
  */
 
-// Equipment interface that can be shared between client and server
-export interface Equipement {
-  id?: number;
-  model_reference: string;
-  numero_serie: string;
-  designation: string;
-  observation: string;
-  numero_inventaire: string;
-  created_at: string;
-  modified_at?: string;
-  status?: string;
-}
-
-// Filter option type for dropdowns
-export interface FilterOption {
-  label: string;
-  value: string;
-}
-
-/**
- * Format a date string for display
- * @param dateString - ISO date string
- * @returns Formatted date string in DD Month YYYY format
- */
-export function formatDate(dateString: string): string {
-  if (!dateString) return '';
-
-  const date = new Date(dateString);
-
-  // Check if the date is valid
-  if (isNaN(date.getTime())) {
-    return 'Date invalide';
-  }
-
-  // Format options for date
-  const options: Intl.DateTimeFormatOptions = {
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  };
-
-  return date.toLocaleDateString('fr-FR', options);
-}
+import { Equipement } from '~/types/equipement';
 
 /**
  * Update an equipement by ID

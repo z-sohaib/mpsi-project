@@ -9,10 +9,10 @@ import ComponentsTable from '../components/ui/Tableau';
 import Layout from '~/components/layout/Layout';
 import { requireUserId } from '~/session.server';
 import {
-  DashboardData,
   fetchDashboardData,
   mockDashboardData,
 } from '~/models/dashboard.server';
+import { DashboardData } from '~/types/dashboard';
 
 const icons = {
   users: <img src='/demandes.png' alt='Demandes' className='size-6' />,

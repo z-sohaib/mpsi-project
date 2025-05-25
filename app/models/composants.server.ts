@@ -1,4 +1,4 @@
-import { Composant } from './composants.shared';
+import { Composant } from '../types/composant';
 
 /**
  * Fetch all composants from the API

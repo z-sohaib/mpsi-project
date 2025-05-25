@@ -1,12 +1,6 @@
-// components/layout/Layout.tsx
-
-import { ReactNode } from 'react';
+import { LayoutProps } from '~/types/layout';
 import Sidebar from './Sidebar';
 import Topbar from './Topbar';
-
-interface LayoutProps {
-  children: ReactNode;
-}
 
 export default function Layout({ children }: LayoutProps) {
   return (

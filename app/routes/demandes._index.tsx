@@ -10,12 +10,9 @@ import { requireUserId } from '~/session.server';
 // Import from server-only module in loader/action
 import { fetchDemandes, getFilterOptions } from '~/models/demandes.server';
 // Import from shared module for client use
-import {
-  Demande,
-  FilterOption,
-  formatDate,
-  filterDemandesByStatus,
-} from '~/models/demandes.shared';
+import { filterDemandesByStatus } from '~/models/demandes.shared';
+import { formatDate } from '~/utils/dates';
+import { Demande, FilterOption } from '~/types/demande';
 
 type StatusDemandeType =
   | 'Acceptee'

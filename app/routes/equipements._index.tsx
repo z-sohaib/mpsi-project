@@ -17,13 +17,13 @@ import {
   fetchEquipements,
   getFilterOptions,
 } from '~/models/equipements.server';
-// Import from shared module for client use
-import { Equipement, formatDate } from '~/models/equipements.shared';
 // Import the new email functions
 import {
   sendEquipmentsListEmail,
   downloadEquipmentsPdf,
 } from '~/utils/email.server';
+import { Equipement } from '~/types/equipement';
+import { formatDate } from '~/utils/dates';
 
 type ActionData = {
   success: boolean;

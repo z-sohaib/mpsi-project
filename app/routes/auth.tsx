@@ -8,7 +8,7 @@ import { data } from '@remix-run/node';
 import { redirect, useActionData } from '@remix-run/react';
 import { useEffect, useRef } from 'react';
 import Header from '../components/ui/Header';
-import { Login } from '~/models/user.server';
+import { Login } from '~/models/users.server';
 import { createUserSession, getUserId } from '~/session.server';
 
 export const meta: MetaFunction = () => [

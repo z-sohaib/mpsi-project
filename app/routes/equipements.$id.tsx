@@ -12,11 +12,9 @@ import { Input } from '~/components/ui/Input';
 import Layout from '~/components/layout/Layout';
 import { requireUserId } from '~/session.server';
 import { fetchEquipementById } from '~/models/equipements.server';
-import {
-  Equipement,
-  formatDate,
-  updateEquipementById,
-} from '~/models/equipements.shared';
+import { updateEquipementById } from '~/models/equipements.shared';
+import { formatDate } from '~/utils/dates';
+import { Equipement } from '~/types/equipement';
 
 // Define types for the loader and action data
 type ActionData = {

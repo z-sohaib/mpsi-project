@@ -9,8 +9,7 @@ import { DemandFilters } from '~/components/ui/DemandFilters';
 import { requireUserId } from '~/session.server';
 // Import from server-only module in loader/action
 import { fetchComposants, getFilterOptions } from '~/models/composants.server';
-// Import from shared module for client use
-import { Composant } from '~/models/composants.shared';
+import { Composant } from '~/types/composant';
 
 export async function loader({ request }: LoaderFunctionArgs) {
   try {

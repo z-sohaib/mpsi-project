@@ -33,23 +33,21 @@ const sections = [
     icon: <Puzzle className='size-4' />,
     links: [
       { name: 'Liste des composants', path: '/composants' },
-      { name: 'Ajouter un composant', path: '/composants/new' }, // Updated to correct path
+      { name: 'Ajouter un composant', path: '/composants/new' },
     ],
   },
   {
     title: 'Équipements',
     icon: <Monitor className='size-4' />,
     links: [
-      { name: 'Liste des équipements', path: '/equipements' }, // Placeholder, update if needed
-      { name: 'Ajouter un équipement', path: '/equipements/new' }, // Placeholder, update if needed
+      { name: 'Liste des équipements', path: '/equipements' },
+      { name: 'Ajouter un équipement', path: '/equipements/new' },
     ],
   },
   {
     title: 'Help',
     icon: <HelpCircle className='size-4' />,
-    links: [
-      { name: 'FAQs', path: '/faq' }, // Placeholder, update if needed
-    ],
+    links: [{ name: 'FAQs', path: '/faq' }],
   },
   {
     title: 'Utilisateurs',

@@ -1,4 +1,4 @@
-import { Intervention } from './interventions.shared';
+import { Intervention } from '~/types/demande';
 
 /**
  * Fetch all interventions from the API

@@ -1,22 +1,104 @@
 /**
- * Server-side functions for user management
+ * Consolidated server-side functions for user management
  */
+import { AdminUser, User, UserSession } from '../types/user';
 
-export type User = {
-  id: number;
-  username: string;
-  email: string;
-  password?: string; // Only used for creation, not returned in GET responses
-};
+/**
+ * Authenticate user with email and password
+ */
+export async function Login(
+  email: string,
+  password: string,
+): Promise<UserSession | null> {
+  try {
+    const response = await fetch('https://itms-mpsi.onrender.com/api/token/', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ email, password }),
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const data = await response.json();
+
+    return {
+      userId: data.user_id,
+      access: data.access,
+    };
+  } catch (error) {
+    console.error('Login failed:', error);
+    return null;
+  }
+}
+
+/**
+ * Fetch user profile from the API
+ */
+export async function fetchUserProfile(token: string): Promise<User | null> {
+  try {
+    const response = await fetch(
+      'https://itms-mpsi.onrender.com/api/users/me/',
+      {
+        headers: {
+          Authorization: `Token ${token}`,
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+      },
+    );
+
+    if (!response.ok) {
+      if (response.status === 401) {
+        throw new Error('Authentication failed');
+      }
+      throw new Error(`API returned ${response.status}`);
+    }
+
+    return (await response.json()) as User;
+  } catch (error) {
+    console.error('Failed to fetch user profile:', error);
+    return null;
+  }
+}
 
 /**
  * Fetch all users from the API
  * SERVER-ONLY function
  */
-export async function fetchUsers(token: string): Promise<User[]> {
+export async function fetchUsers(token: string): Promise<AdminUser[]> {
   try {
     const response = await fetch(
       'https://itms-mpsi.onrender.com/api/admin/users/',
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+      },
+    );
+
+    return (await response.json()) as AdminUser[];
+  } catch (error) {
+    console.error('Failed to fetch users:', error);
+    return [];
+  }
+}
+
+/**
+ * Fetch a single user by ID
+ */
+export async function fetchUserById(
+  token: string,
+  userId: string,
+): Promise<AdminUser | null> {
+  try {
+    const response = await fetch(
+      `https://itms-mpsi.onrender.com/api/admin/users/${userId}/`,
       {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -33,43 +115,10 @@ export async function fetchUsers(token: string): Promise<User[]> {
       throw new Error(`API returned ${response.status}`);
     }
 
-    return (await response.json()) as User[];
+    return (await response.json()) as AdminUser;
   } catch (error) {
-    console.error('Failed to fetch users:', error);
-    return [];
-  }
-}
-
-/**
- * Fetch a single user by ID
- */
-export async function fetchUserById(
-  token: string,
-  userId: string,
-): Promise<User | null> {
-  try {
-    const response = await fetch(
-      `https://itms-mpsi.onrender.com/api/admin/users/${userId}/`,
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
-        },
-      },
-    );
-
-    if (!response.ok) {
-      if (response.status === 404) {
-        return null;
-      }
-      throw new Error(`API returned ${response.status}`);
-    }
-
-    return (await response.json()) as User;
-  } catch (error) {
-    console.error('Failed to fetch user:', error);
-    throw error;
+    console.error('Failed to fetch user by ID:', error);
+    return null;
   }
 }
 
@@ -83,36 +132,25 @@ export async function createUser(
     email: string;
     password: string;
   },
-): Promise<User> {
+): Promise<AdminUser> {
   try {
     const response = await fetch(
-      'https://itms-mpsi.onrender.com/api/admin/users/create/',
+      'https://itms-mpsi.onrender.com/api/admin/users/',
       {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
-          Accept: 'application/json',
         },
         body: JSON.stringify(userData),
       },
     );
 
     if (!response.ok) {
-      const errorText = await response.text();
-      try {
-        // Try to parse error as JSON
-        const errorData = JSON.parse(errorText);
-        throw new Error(errorData.detail || `API Error: ${response.status}`);
-      } catch (e) {
-        // If can't parse as JSON, use text directly
-        throw new Error(
-          `API Error: ${response.status} - ${errorText || 'Unknown error'}`,
-        );
-      }
+      throw new Error(`API returned ${response.status}`);
     }
 
-    return (await response.json()) as User;
+    return (await response.json()) as AdminUser;
   } catch (error) {
     console.error('Failed to create user:', error);
     throw error;
@@ -125,8 +163,8 @@ export async function createUser(
 export async function updateUserById(
   token: string,
   userId: string,
-  updates: Partial<User>,
-): Promise<User | null> {
+  updates: Partial<AdminUser>,
+): Promise<AdminUser | null> {
   try {
     const response = await fetch(
       `https://itms-mpsi.onrender.com/api/admin/users/${userId}/`,
@@ -135,21 +173,22 @@ export async function updateUserById(
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
-          Accept: 'application/json',
         },
         body: JSON.stringify(updates),
       },
     );
 
     if (!response.ok) {
-      console.error('Failed to update user:', response.statusText);
+      if (response.status === 401) {
+        throw new Error('Authentication failed');
+      }
       throw new Error(`API returned ${response.status}`);
     }
 
-    return (await response.json()) as User;
+    return (await response.json()) as AdminUser;
   } catch (error) {
-    console.error('Failed to update user:', error);
-    throw error;
+    console.error('Failed to update user by ID:', error);
+    return null;
   }
 }
 
@@ -169,21 +208,15 @@ export async function updateUserPassword(
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
-          Accept: 'application/json',
         },
         body: JSON.stringify({ password: newPassword }),
       },
     );
 
-    if (!response.ok) {
-      console.error('Failed to update password:', response.statusText);
-      throw new Error(`API returned ${response.status}`);
-    }
-
-    return true;
+    return response.ok;
   } catch (error) {
-    console.error('Failed to update password:', error);
-    throw error;
+    console.error('Failed to update user password:', error);
+    return false;
   }
 }
 
@@ -201,18 +234,14 @@ export async function deleteUserById(
         method: 'DELETE',
         headers: {
           Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
         },
       },
     );
 
-    if (!response.ok) {
-      console.error('Failed to delete user:', response.statusText);
-      throw new Error(`API returned ${response.status}`);
-    }
-
-    return true;
+    return response.ok;
   } catch (error) {
-    console.error('Failed to delete user:', error);
-    throw error;
+    console.error('Failed to delete user by ID:', error);
+    return false;
   }
 }
