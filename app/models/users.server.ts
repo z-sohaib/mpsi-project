@@ -86,7 +86,7 @@ export async function createUser(
 ): Promise<User> {
   try {
     const response = await fetch(
-      'https://itms-mpsi.onrender.com/api/admin/users/',
+      'https://itms-mpsi.onrender.com/api/admin/users/create/',
       {
         method: 'POST',
         headers: {
