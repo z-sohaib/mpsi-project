@@ -11,7 +11,7 @@ export async function Login(
   password: string,
 ): Promise<UserSession | null> {
   try {
-    const response = await fetch('https://itms-mpsi.onrender.com/api/token/', {
+    const response = await fetch('https://itms-mpsi.onrender.com/api/login/', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -24,6 +24,8 @@ export async function Login(
     }
 
     const data = await response.json();
+
+    console.log('Login successful:', data);
 
     return {
       userId: data.user_id,
